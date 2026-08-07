@@ -1,6 +1,43 @@
 ﻿# 验布机软件更新说明
 
 
+## 1.26.0807.085529（2026-08-07）
+
+### 调试 / 现场向导
+
+- **bfsmV1 / V1Sp 现场调试向导：** 提供六步引导与右侧实时叠加预览（边线/布幅/贴标参考线），报告写入 `configs/field_tutorial_report_*.json`，便于售后现场逐步验收留档。
+- **Debug 导航入口：** Debug 面板增加「现场教程」入口，分别覆盖单线与分时频闪机型。
+
+### 磁盘 / 报警
+
+- **磁盘告警收敛：** 仅在图像磁盘达到强制清理阈值时提示；`DISK_USAGE_FORCE` 按警告级别展示，减少状态栏刷屏。
+
+### 界面 / About
+
+- **测试模式醒目标识：** `IsTestMode>0` 时 About 显示红色提示，避免现场误用模拟环境交机。
+
+### 检测 / 自动调光
+
+- **无布停机后重新调光：** 自动调光模式在无布停机后跳过旧卷布尾，新布从头继续调光。
+
+### 文档
+
+- **现场调试文档：** 同步售后向现场调试说明与截图至安装包 `docs/调试文档/`。
+
+
+## 1.26.0806.165722（2026-08-06）
+
+### 调试 / 现场向导
+
+- **bfsmV1 现场调试向导：** `/views/debugfieldtutorial` 六步引导（机型 → 缓存 → 布边 → 分辨率 → 贴标 → 导出），右侧实时叠加预览边线/布幅/贴标参考线，便于现场逐步验收。
+- **bfsmV1Sp 分时频闪向导：** 新增 `/views/debugfieldtutorial_v1sp`，覆盖 `MachineProject=1`、IKapCamera2Sp 分割参数、双线布边（青/紫）与 `TicketOffset`/`TicketOffset2`、`ClothStopOffset`/`ClothStopOffset2`。
+- **双线边预览接口：** `/api/v0/debug/ticket/frame` 增加线1 `DetectEdgeLeft2/Right2` 叠加；报告按机型写入 `configs/field_tutorial_report_v1.json` / `field_tutorial_report_v1sp.json`（含时间戳备份）。
+
+### 文档
+
+- **现场调试文档：** 补充 V1 / V1Sp 向导入口；`分时频闪机型.md` 增加向导说明。
+
+
 ## 1.26.0806.104923（2026-08-06）
 
 ### 磁盘 / 报警
