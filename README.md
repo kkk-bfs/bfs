@@ -1,6 +1,14 @@
 ﻿# 验布机软件更新说明
 
 
+## 1.26.0807.101554（2026-08-07）
+
+### 发布 / 全量安装包
+
+- **全量安装包：** 使用 `setup.iss` 发布 `setup_BullmerFabricScanner_full_*`，对齐精简包已有配置/ERP/视图/现场文档，并包含完整 Qt、CefView 等运行依赖。
+- **安装脚本同步：** `setup.iss` 补齐相对 `setup-release-slim.iss` 缺失的配置、openagent 知识库、调试文档、ERP 客户目录与模型 DLL。
+
+
 ## 1.26.0807.095638（2026-08-07）
 
 ### 发布
