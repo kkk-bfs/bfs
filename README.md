@@ -1,378 +1,215 @@
 ﻿# 验布机软件更新说明
 
 
-## 1.26.0808.152324（2026-08-08）
 
-### ERP / 扫码
+## 1.26.0811.170000（2026-08-11）
 
-- **保存报告不再卡住扫码：** 缩短嵌入式 Python 互斥锁范围，`reportgen`（含 PDF）与 ERP `query` 可重叠执行，避免保存一卷时扫下一卷条码长时间无响应。
-- **CMT 扫码稳定性：** PLM 请求默认直连、不走系统代理；支持 `CMT_PLM_BALEINFO_URL` 指向内网；扫码页缓存 `barcodejs` 并输出各阶段耗时。
+### 发布与安装包
 
-### 测试
+- **要点：** 发布成功后自动向钉钉群发送版本更新消息与下载链接，便于现场及时获取安装包。
+- `publish_github_release.bat` 在 GitHub Release + MySQL 同步成功后调用 `PublicServer/send_dingding.py --release`。
+- 可用 `BFS_SKIP_DINGDING=1` 跳过钉钉通知；钉钉失败不影响已完成的发布。
 
-- **互斥回归用例：** 增加 `TEST ERP PY CONTENTION`，验证长 Python 任务与快速 ERP query 不再串行阻塞。
+### 加载等待提示增强
 
+- **要点：** 长耗时操作可显示等待动画并在后台执行，关闭窗口时更安全地结束等待。
+- `LoadingHint` 支持运行中更新文案；新增 `OperationWaitingHint` 包装异步操作等待。
 
-## 1.26.0807.101554（2026-08-07）
+### 相机采集与编码器相关
 
-### 发布 / 全量安装包
+- **要点：** 优化 IKap 裁剪相机采集路径，并增加 503 端口独立编码器服务与快速快照，降低网络轮询对检测线程的影响。
 
-- **全量安装包：** 使用 `setup.iss` 发布 `setup_BullmerFabricScanner_full_*`，对齐精简包已有配置/ERP/视图/现场文档，并包含完整 Qt、CefView 等运行依赖。
-- **安装脚本同步：** `setup.iss` 补齐相对 `setup-release-slim.iss` 缺失的配置、openagent 知识库、调试文档、ERP 客户目录与模型 DLL。
+### 光源控制多通道统一与亮度恢复修复
 
+#### 背景问题
 
-## 1.26.0807.095638（2026-08-07）
+此前光源设备存在以下问题：
 
-### 发布
+1. **多通道仅 devlight3 支持**：基类 `devlight` 虽有 16 通道串口协议（`turnOn(ch)`、`adjustBrightness(ch, num)`），但 `open()` 只调 `turnOnAll()` 打开全部 16 通道（耗时最多 1.6 秒串口阻塞），不恢复任何通道亮度。普通 `devlight` 双通道场景下通道 1+ 永远不会被打开。
+2. **亮度恢复缺失**：`savedBrightnessForChannel()` 只存在于 `devlight3`，基类 `devlight` 和 `devlight2` 启动时不会从数据库读取已保存亮度值。
+3. **devlight2 空实现**：`devlight2::turnOn(int)` 和 `devlight2::turnOff(int)` 为空函数，按通道调用时静默丢弃操作。
+4. **LightSetting setupUi 混乱**：用 `type == "devlight3"` 硬判断决定滑块数量；光源1/光源2 近 70 行代码复制；4 个 apply + 4 个 slot + 4 个 debounce timer + 4 个 dragging flag 完全重复；`applyDevlight1BackBrightness` 非 devlight3 时调 `adjustBrightness(val)` 单参数→实际写 ch0，背光滑块控制了主光。
 
-- **精简安装包重发：** 全量重编并同步 views / ERP / 现场调试文档后发布，版本与 About「检查更新」一致。
+#### 改动内容
 
-### 调试 / 现场向导
+**dev_light.h / dev_light.cpp（基类改动）**
 
-- **现场教程：** 保留 bfsmV1 / V1Sp 六步向导、实时叠加预览与报告导出能力。
+- 新增 `m_activeChannelCount` 成员（默认 1，向后兼容），通过 `setActiveChannelCount(count)` 配置。
+- 新增 `activeChannelCount()` getter。
+- 新增 `savedBrightnessKey(int channel)` 虚方法：统一存储键公式 `LastSaveBrightness + (id>1?id:"") + (ch>0?"_"+ch:"")`。
+- 新增 `savedBrightnessForChannel(int channel)` 虚方法：从数据库读取指定通道亮度，查不到时回退到 `SystemSetting` 内存值（`LastSaveBrightness` / `LastSaveBrightness2`）。
+- `open()` 中新增亮度恢复逻辑：遍历 `m_activeChannelCount` 个通道，逐个调用 `savedBrightnessForChannel(i)` 读取并 `adjustBrightness(i, saved)` 恢复。
+- `turnOn()` / `turnOff()` 无参版本改为遍历 `m_activeChannelCount` 个活跃通道（替代原来的单通道操作）。
 
+**dev_light2.cpp（海康光源）**
 
-## 1.26.0807.091953（2026-08-07）
+- `turnOn(int channel)` 由空实现改为转发到 `turnOn()`（海康 `SH#` 为全局开关，不支持单通道开关）。
+- `turnOff(int channel)` 由空实现改为转发到 `turnOff()`。
 
-### 调试 / 现场向导
+**dev_light3.h / dev_light3.cpp（分时频闪）**
 
-- **现场调试向导入包：** 同步 bfsmV1 / V1Sp 现场教程页、导航入口与预览接口，覆盖机型确认、布边、分辨率、贴标与报告导出。
+- `savedBrightnessForChannel()` 加 `override` 关键字，声明覆盖基类。原有实现逻辑不变（含 `isEnabledStrobeChannel` 检查和 DB 读取）。
 
-### 灯光 / 设备
+**LightSetting.h / LightSetting.cpp（光源设置面板重构）**
 
-- **灯光控制完善：** 优化 `dev_light3` 与灯光设置面板联动，提升现场调光稳定性。
+- 删除 16 个硬编码成员（`m_SliderBrightness`、`m_SliderBrightness_1`、`m_Brightness2` 等），替换为 `LightChannelUI` 和 `LightGroupUI` 数据结构 + `m_lightGroups` 向量。
+- `setupUi()` 从 289 行压缩到约 95 行：遍历 `gMachine->devices`，对每个 `devlight*` 调用 `createBrightnessRow(dev, deviceIndex)`，按 `dev->activeChannelCount()` 动态创建 N 个滑块。
+- 4 个 apply 函数 + 4 个 slot 函数统一为 `applyBrightness(groupIndex, channelIndex)` 和 `slot_sliderBrightnessChanged(groupIndex, channelIndex)` 两个参数化函数。
+- 修复 `applyDevlight1BackBrightness` bug：统一用 `adjustBrightness(channelIndex, brightness)` 带通道号调用，不再出现背光滑块写主光通道的问题。
+- 存储键使用 `dev->savedBrightnessKey(channel)` 统一生成，不再散落硬编码字符串。
 
-### 磁盘 / 报警 / 调光
+#### 存储键兼容性
 
-- **磁盘告警与自动调光：** 强制清理阈值才提示；无布停机后按新卷继续自动调光。
+| 设备 ID | 通道 | 存储键 | 兼容旧版本 |
+|---------|------|--------|-----------|
+| 1 | 0 | `LastSaveBrightness` | ✅ |
+| 2 | 0 | `LastSaveBrightness2` | ✅ |
+| 1 | 1 | `LastSaveBrightness_1` | ✅（devlight3 原有） |
+| 2 | 1 | `LastSaveBrightness2_1` | ✅（devlight3 原有） |
+| 3 | 0 | `LastSaveBrightness3` | 新增 |
+| 1 | 2 | `LastSaveBrightness_2` | 新增 |
 
-### 文档
+不需要数据迁移，`m_activeChannelCount` 默认 1 时行为与原版本完全一致。
 
-- **售后现场调试文档：** 安装包携带 `docs/调试文档/`（含现场调试说明）。
+---
 
+### 机型组装光源设备使用案例
 
-## 1.26.0807.085529（2026-08-07）
+#### 统一规则
 
-### 调试 / 现场向导
+1. **设备键名**：`devlight{N}`（N=1,2,3...），一个键名对应一个物理控制器。
+2. **通道数**：通过 `setActiveChannelCount(n)` 在 `init()` 之前设置，默认 1。
+3. **亮度恢复**：`open()` 自动遍历活跃通道逐个恢复，无需机型代码手动调用。
+4. **存储键**：由 `savedBrightnessKey(ch)` 自动生成，调用方无需拼接字符串。
 
-- **bfsmV1 / V1Sp 现场调试向导：** 提供六步引导与右侧实时叠加预览（边线/布幅/贴标参考线），报告写入 `configs/field_tutorial_report_*.json`，便于售后现场逐步验收留档。
-- **Debug 导航入口：** Debug 面板增加「现场教程」入口，分别覆盖单线与分时频闪机型。
+#### 案例 1：bfsmV1 — 单灯 welop 控制器（单通道）
 
-### 磁盘 / 报警
+```cpp
+// PublicFabricScanner/bfsmV1.cpp init()
+// lightDeviceType == 2 → 沃德普控制器
+light1 = new devlight();
+light1->id = 1;
+light1->name = "devlight1";
+// setActiveChannelCount 不调用，默认 1
+light1->init();
 
-- **磁盘告警收敛：** 仅在图像磁盘达到强制清理阈值时提示；`DISK_USAGE_FORCE` 按警告级别展示，减少状态栏刷屏。
+m_lightThread1 = new QThread;
+light1->moveToThread(m_lightThread1);
+m_lightThread1->start();
 
-### 界面 / About
+light1->open();
+// → open() 内部：turnOnAll() + 遍历 1 个通道恢复亮度
 
-- **测试模式醒目标识：** `IsTestMode>0` 时 About 显示红色提示，避免现场误用模拟环境交机。
+devices["devlight1"] = light1;
+```
+
+**效果**：启动后自动读取 `LastSaveBrightness` 恢复通道 0 亮度。UI 面板显示 1 个亮度滑块。
+
+#### 案例 2：bfsmV1 — 单灯 welop 控制器（双通道独立控制）
+
+```cpp
+// 如果 welop 控制器接了正光 + 背光两路
+light1 = new devlight();
+light1->id = 1;
+light1->name = "devlight1";
+light1->setActiveChannelCount(2);  // ← 新增：2 通道独立控制
+light1->init();
 
-### 检测 / 自动调光
+m_lightThread1 = new QThread;
+light1->moveToThread(m_lightThread1);
+m_lightThread1->start();
 
-- **无布停机后重新调光：** 自动调光模式在无布停机后跳过旧卷布尾，新布从头继续调光。
+light1->open();
+// → open() 内部：turnOnAll() + 遍历 2 个通道：
+//   ch0 → 读取 LastSaveBrightness 恢复
+//   ch1 → 读取 LastSaveBrightness_1 恢复
 
-### 文档
+devices["devlight1"] = light1;
+```
 
-- **现场调试文档：** 同步售后向现场调试说明与截图至安装包 `docs/调试文档/`。
+**效果**：启动后自动恢复正光和背光亮度。UI 面板自动显示 2 个亮度滑块（主光/背光），各通道独立控制。
 
+#### 案例 3：bfsmDual2 — 普通光源 + 分时频闪双设备
 
-## 1.26.0806.165722（2026-08-06）
+```cpp
+// PublicFabricScanner2/bfsmDual2.cpp init()
+// 主线程光源（普通 welop）
+m_devlight = new devlight();
+m_devlight->id = 1;
+// setActiveChannelCount 不调用，默认 1
+m_devlight->init();
+m_devlight->open();
+// → open() 内部：turnOnAll() + 恢复 LastSaveBrightness
 
-### 调试 / 现场向导
+// 分时光线光源（分时频闪控制器，2 通道）
+m_devlight2 = new devlight3();
+m_devlight2->id = 2;
+m_devlight2->init();
+m_devlight2->open();
+// → devlight3::init() 内部 restoreSavedBrightness() 恢复 2 通道亮度
 
-- **bfsmV1 现场调试向导：** `/views/debugfieldtutorial` 六步引导（机型 → 缓存 → 布边 → 分辨率 → 贴标 → 导出），右侧实时叠加预览边线/布幅/贴标参考线，便于现场逐步验收。
-- **bfsmV1Sp 分时频闪向导：** 新增 `/views/debugfieldtutorial_v1sp`，覆盖 `MachineProject=1`、IKapCamera2Sp 分割参数、双线布边（青/紫）与 `TicketOffset`/`TicketOffset2`、`ClothStopOffset`/`ClothStopOffset2`。
-- **双线边预览接口：** `/api/v0/debug/ticket/frame` 增加线1 `DetectEdgeLeft2/Right2` 叠加；报告按机型写入 `configs/field_tutorial_report_v1.json` / `field_tutorial_report_v1sp.json`（含时间戳备份）。
+devices["devlight1"] = m_devlight;
+devices["devlight2"] = m_devlight2;
+```
 
-### 文档
+**效果**：UI 面板自动显示 3 个滑块——光源 1（1 个）+ 光源 2（2 个，正/反光）。
 
-- **现场调试文档：** 补充 V1 / V1Sp 向导入口；`分时频闪机型.md` 增加向导说明。
+#### 案例 4：bfsmV1Sp — 单分时频闪控制器（双通道）
 
+```cpp
+// PublicFabricScanner3/bfsmV1Sp.cpp init()
+m_devlight = new devlight3();
+m_devlight->id = 1;
+m_devlight->init();
+// devlight3 内部 kEnabledStrobeChannelCount=2，自动管理 2 通道
 
-## 1.26.0806.104923（2026-08-06）
+m_devlightThread = new QThread;
+m_devlight->moveToThread(m_devlightThread);
+m_devlightThread->start();
 
-### 磁盘 / 报警
+m_devlight->open();
+// → devlight3 有独立 open() 实现，不调基类 open()
+// → init() 中已通过 restoreSavedBrightness() 恢复
 
-- **磁盘告警仅严重占用触发：** 图像磁盘占用达到强制清理阈值（默认 ≥90%）时才发钉钉通知与状态栏提示；常规预警阈值（默认 75%）仍触发清理，不再报警刷屏。
-- **严重占用按警告展示：** `DISK_USAGE_FORCE` 由严重报警改为警告级别（橙色），状态栏不再以红色严重报警显示。
+devices["devlight1"] = m_devlight;
+```
 
-### 调试 / 现场教程
+**效果**：UI 面板自动显示 2 个滑块（正光/背光），亮度恢复由 devlight3 内部处理。
 
-- **现场教程页：** Debug 面板新增「现场教程」页面，支持步骤指引与票样预览；报告可读写 `configs/field_tutorial_report.json`（含备份），便于现场验收留档。
+#### 案例 5：海康控制器多通道（假设场景）
 
+```cpp
+// 如果使用海康控制器并需要多通道
+light1 = new devlight2();
+light1->id = 1;
+light1->setActiveChannelCount(2);  // 海康双通道
+light1->init();
 
-## 1.26.0806.080500（2026-08-06）
+m_lightThread1 = new QThread;
+light1->moveToThread(m_lightThread1);
+m_lightThread1->start();
 
-### 界面 / About
+light1->open();
+// → open() 内部：turnOnAll() + 遍历 2 通道恢复亮度
+//   turnOn(int ch) → 转发到 turnOn()（海康全局开关）
+//   adjustBrightness(ch, val) → 按通道设置（海康 SA0168# 协议支持）
 
-- **测试模式醒目标识：** `IsTestMode>0` 时 About 页显示红色提示条（全模拟 / 半模拟），避免现场误当正式环境使用。
+devices["devlight1"] = light1;
+```
 
-### 检测 / 自动调光
+#### 机型装配清单
 
-- **无布停机后重新调光：** `IsAutoAdjustBrightnessMode=1` 在无布停机后跳过旧卷布尾区域，新布从头继续自动调光；`last_clothindex` 仅在实际执行调光时更新，避免误跳过。
+| 机型 | 设备键名 | 类型 | 通道数 | 亮度恢复位置 |
+|------|---------|------|--------|-------------|
+| bfsmV1 | devlight1 | devlight / devlight2 | 1（可配 2） | 基类 `open()` |
+| bfsmDual2 | devlight1 | devlight | 1 | 基类 `open()` |
+| bfsmDual2 | devlight2 | devlight3 | 2 | devlight3 `init()` |
+| bfsmV1Sp | devlight1 | devlight3 | 2 | devlight3 `init()` |
 
-### 发布 / 运维
+> **注**：`open()` 中 `turnOnAll()` 会打开全部 16 通道（每个通道等待 100ms 串口写完成），后续优化建议改为 `turnOn()` 仅打开 `m_activeChannelCount` 个活跃通道，减少启动耗时。
 
-- **发行仓库切换：** 安装包发布目标改为 `kkk-bfs/bfs`；发版时同步完整 `更新说明.md` 为仓库 `README.md`，About「检查更新」仍从 MySQL `releases.download_url` 拉取。
+---
 
-
-## 1.26.0805.161734（2026-08-05）
-
-### ERP / CMT 报表
-
-- **疵点评分与幅宽记录：** CMT `reportgen` 按 DefectID 多语言显示疵点名，按码段汇总扣分（单码最多 4 分）；幅宽记录排除首尾各一段后按三列排版进报告模板。
-
-### PLC / 远东
-
-- **除尘寄存器地址校正：** `plcregisters.json` 中 `dust_cleaner` 地址由 `73` 调整为 `6D`（`400110`），与现场 PLC 映射一致。
-
-
-## 1.26.0805.143030（2026-08-05）
-
-### ERP / 任务加载
-
-- **避免重复加载上传任务：** 工厂目录（`ERP_FACTORY_FOLDER`）已加载 `erp_upload` / `erp_webupload` / `erp_bullmerupload` / `erp_backup` 前缀任务时，不再从默认 `erpinterface` 根目录重复创建同前缀任务，避免双任务并发上传。
-
-### 相机 / 模拟模式
-
-- **测试模式相机统一：** `IsTestMode=1/2` 时一律使用 `DALSASim` 模拟相机，避免 `CameraType=8` 误开真实 IKap 采集卡。
-
-### ERP / 报喜鸟
-
-- **上传间隔：** `database_maintain.sql` 将 `ERPUploadInterval` 设为 `35` 秒，降低 ERP 上传频率压力。
-
-
-## 1.26.0805.085718（2026-08-05）
-
-### 相机 / 模拟模式
-
-- **测试模式相机统一：** `IsTestMode=1/2` 时一律使用 `DALSASim` 模拟相机，避免 `CameraType=8` 误开真实 IKap 采集卡。
-
-### ERP / 报喜鸟
-
-- **上传间隔：** `database_maintain.sql` 将 `ERPUploadInterval` 设为 `35` 秒，降低 ERP 上传频率压力。
-
-
-## 1.26.0804.091320（2026-08-04）
-
-### 设备 / 运维
-
-- **安装日期：** 新增系统参数 `InstallDate`（首次启动写入 `yyyy-MM-dd`）；About 页展示；`task_test` 同步到云端 MySQL `machine.installdate`（库表由 `scripts/mysql/add_machine_installdate.py` 维护）。
-
-
-## 1.26.0803.135303（2026-08-03）
-
-### 相机 / IKap
-
-- **可选加载采集卡配置：** 新增系统参数 `IKapCameraEnableLoadConfig`（默认 `0` 关闭）。仅开启时，`IKapCamera` 初始化才加载 `configs/{序列号}.vlcf`，避免现场默认误加载配置文件。
-
-
-## 1.26.0801.155652（2026-08-01）
-
-### 报表 / 疵点统计
-
-- **疵点数量汇总结果表扩展：** `bfsdefectstats` 结果表增加码长、幅宽、总扣分列；`/api/v0/sheets/defectstats` 同步返回 `length` / `width` / `totalPoints`，导出 CSV 一并包含。
-
-
-## 1.26.0731.152639（2026-07-31）
-
-### 设备 / 调试
-
-- **触摸板设备接入：** 新增 `dev_touchpad` 与调试页 `debugtouchpad.html`，支持串口开闭、端口设置与帧状态查询（`/api/v0/devices/touchpad/*`），便于现场联调触摸板。
-- **IKap 相机序列号：** 设备信息增加 `serialNumber` 字段，便于多相机识别与排查。
-
-### ERP / 远东
-
-- **缓存文件命名与清理：** 远东接口拉取明细缓存改为 `temp_日期_仓位_*.xml/json`，仅清理带日期前缀的过期缓存，避免误删非日期命名文件；仓位查询缺省 `date` 时默认当天。
-
-
-## 1.26.0731.135710（2026-07-31）
-
-### PLC / 远东
-
-- **除尘装置随软件开关：** 远东工厂（`yuandong`）软件启动时向 PLC `VW218`（`400110` / `0x73`）写 `1` 开启除尘装置，关闭软件时写 `0` 关闭，避免退出后装置继续运行。
-
-
-## 1.26.0731.081611（2026-07-31）
-
-### 版本号
-
-- **版本精确到秒：** 第四段由小时改为 `HHMMSS`（如 `081611`），About / 安装包文件名 / 更新说明统一为 `1.26.月日.时分秒`（例 `1.26.0731.081611`）。
-
-### 钉钉 / 报表摘要
-
-- **幅宽与贴标摘要可读化：** 统计/日报中的机型参数摘要，布边检测算法与布边贴标模式改为中文名称；贴标关闭时明确显示「贴标:关」，开启时展示 X/Y 偏移与布边模式文案。
-
-
-## 1.26.0730.17（2026-07-30）
-
-### 系统参数
-
-- **参数热更新同步：** `updateSystemPara` 写入后同步更新 `SystemSetting` 成员与 `settings.*` 共享内存，避免仅改库未改内存导致打印/贴标等仍用旧值。
-- **重载接口：** 新增 `GET /api/v0/settings/reload`（`LoadAllPara`）；帮助页启用打印机、二维码打印参数保存后自动重载，无需重启即可生效。
-
-### 疵点顺序
-
-- **排序配置解析报错：** `defect_order.json` 非法（如尾逗号）时不再静默回退默认顺序；日志 `qCritical`，接口返回 `defectOrderError`，人工标注/编辑页弹窗提示路径与解析错误。
-
-
-## 1.26.0730.16（2026-07-30）
-
-### 疵点顺序
-
-- **工厂级排序配置：** 人工标注疵点列表优先读取 `erpinterface/<ERP_FACTORY_FOLDER>/defect_order.json`，不存在时回退 `configs/defect_order.json`；报喜鸟等工厂可单独维护顺序。
-- **默认/报喜鸟顺序更新：** 同步针织常用疵点名称排序（标签、色点、经纬疵、色纤、横档等），未列出的类型仍追加在末尾。
-
-
-## 1.26.0730.12（2026-07-30）
-
-### 疵点设置
-
-- **切换布种同步与去重：** 切换布种时，`DefectSetting` 与 `defects`（`IsDefaultCheck=1`）及默认方案对齐；同一布种下同一 `DefectID` 多行重复时只保留一条，并统一名称，避免列表出现重复疵点。
-
-
-## 1.26.0730.11（2026-07-30）
-
-### 疵点与界面
-
-- **自定义疵点列表行号：** `custom_defects` 增加「行号」列；开启「只显示已启用」或搜索过滤后，按当前可见行从 1 连续重排。
-
-
-## 1.26.0730.09（2026-07-30）
-
-### ERP / 报喜鸟
-
-- **针织默认疵点名称同步：** `database_maintain.sql` 末尾按 `defect_default.md` 同步更新 `Name` 与 `CustomerName`（标签、污渍/油污、经疵、纬疵、色纤、针孔边、花布边、擦伤、横档等），安装后维护脚本即可生效。
-
-
-## 1.26.0730.08（2026-07-30）
-
-### 发布与工具
-
-- **一键打包发布：** `build-release-installer.bat` 串联编译 → `updateviews`/`updateerp` → ISCC 精简包 → GitHub/MySQL；支持 `nobuild` / `nopublish`。
-- **更新说明自动起草：** 定时任务可通过 Cursor Agent 按当前小时版本追加 `更新说明.md` 章节，再打包发布。
-
-### ERP
-
-- **导出列 MistakeStopCount：** `cols.dat` 增加误停次数统计列，供导出模板选用。
-
-
-## 1.26.0729.20（2026-07-29）
-
-### 在线更新 / 发布
-
-- **GitHub Releases 排序：** 新建 Release 前在 `mdkoss/bfs` 推送空 commit，再按新 commit 打 tag，避免多个版本共用同一 `created_at` 导致列表不按发布时间排序。
-
-
-## 1.26.0729.19（2026-07-29）
-
-### 版本号
-
-- **版本号补零格式：** 月日固定为 `MMDD`（如 `0729`）、小时固定为 `HH`（如 `08`），About / 钉钉 / 安装包文件名统一为 `1.26.0729.HH`；并修复 About、钉钉版本未随 `version.h` 重编的问题。
-
-
-## 1.26.729.18（2026-07-29）
-
-### 在线更新
-
-- **检查更新超时卡死：** About「检查更新」改为后台线程查询云端版本，并设置 MySQL 连接/读写超时与 UI 超时；网络不通时不再冻住界面，超时后提示并可重试。
-
-### ERP / 打印
-
-- **报喜鸟 ZPL 打印超时：** 默认改走 Windows 本机队列 RAW（`ZPL_PRINTER_TRANSPORT=windows`），发送前探测脱机/暂停，大图分块写入，避免误连不可达 IP 导致「发送打印任务超时」。
-- **ERP 静态目录可浏览：** 浏览器访问 `/erpinterface` 可列出并下载程序目录下 ERP 文件，便于现场核对脚本与配置。
-
-### 疵点与界面
-
-- **针织默认疵点目录更新：** 同步 `defect_default` 名称/编号（标签、经纬疵、色纤、横档等）。
-- **贴标测试「打印二维码」：** 按系统参数 `IsEnableESCPrinter` 显示，不再依赖设备列表中已有 ESC 打印机条目。
-
-### 文档
-
-- **验布机调试文档：** 补充布边/视觉幅宽等参数说明，便于现场排查。
-
-
-## 1.26.729.17（2026-07-29）
-
-### 在线更新
-
-- **检查更新超时卡死：** About「检查更新」改为后台线程查询云端版本，并设置 MySQL 连接/读写超时与 UI 超时；网络不通时不再冻住界面，超时后提示并可重试。
-
-
-## 1.26.729.15（2026-07-29）
-
-### 编码器
-
-- **码长编码器反向误停机无法再启动：** 修复 `task_cloth_weight` 反向检测仅看 `machine_state==1`、报警后每圈重复 `Stop()` 的问题；改为仅在前进运行（`!IsStop && !IsReversal`）时检测，停机/反转时刷新基准并清报警，`Stop()` 仅首次触发一次。
-
-
-## 1.26.729.14（2026-07-29）
-
-### 检测与安装包
-
-- **模型推理自检默认关闭：** `EnableModelInferenceSelfTest` 默认改为 0，避免启动时额外跑 Python 自检影响开机速度。
-- **自检脚本去 OpenCV 依赖：** `model_inference_selftest.py` 改为标准库生成/读取 BMP，安装环境无需 cv2/numpy。
-- **精简安装包附带自检脚本：** `setup-release-slim.iss` 打包 `erpinterface/model_inference_selftest.py`，现场可按需开启自检。
-
-
-## 1.26.729.8（2026-07-29）
-
-### 光源
-
-- **停机超时关灯策略调整：** `task_stop_timeout_light` 在验布中/暂停（`machine_state=1/2`）且停机超时后关灯；默认超时由 10s 调整为 **60s**（`LightTimeoutTask.TimeoutSec`）。恢复移动时本任务不再直接开灯，仅清计时，开灯改由「继续验布 / PLC 物理启动」入口负责。
-- **PLC 物理启动恢复光源：** 新增 `task_light_physical_resume`；PLC 从停止变为运行时发布 `physicalResumeSeq`，若光源此前因超时关闭则自动 `turnOnAll`。
-- **暂停验布关灯：** 实时检测「暂停」统一关闭光源，并标记 `global.light.offByStopTimeout`；「继续」开灯后清除该标记。
-- **空闲亮灯也计超时：** 未开验布（`machine_state=0`）但灯仍亮时，同样按超时关灯，避免停机后灯长时间常亮。
-
-
-## 1.26.728.17（2026-07-28）
-
-### 光源
-
-- **停机超时关灯策略调整：** `task_stop_timeout_light` 在验布中/暂停（`machine_state=1/2`）且停机超时后关灯；默认超时由 10s 调整为 **60s**（`LightTimeoutTask.TimeoutSec`）。恢复移动时本任务不再直接开灯，仅清计时，开灯改由「继续验布 / PLC 物理启动」入口负责。
-- **PLC 物理启动恢复光源：** 新增 `task_light_physical_resume`；PLC 从停止变为运行时发布 `physicalResumeSeq`，若光源此前因超时关闭则自动 `turnOnAll`。
-- **暂停验布关灯：** 实时检测「暂停」统一关闭光源，并标记 `global.light.offByStopTimeout`；「继续」开灯后清除该标记。
-- **空闲亮灯也计超时：** 未开验布（`machine_state=0`）但灯仍亮时，同样按超时关灯，避免停机后灯长时间常亮。
-
-
-## 1.26.728.16（2026-07-28）
-
-### 安装包与文档
-
-- **验布机调试文档入包：** `updateviews` 同步 `docs/调试文档` 到安装目录，便于现场查阅调试说明与截图。
-- **版本资源恢复小时段：** PE / 安装包版本号恢复为四段（`主.年.月日.小时`），与 About「检查更新」比对口径一致。
-
-### 在线更新
-
-- **发布附带更新说明：** 发布脚本自动从 `更新说明.md` 抽取当前版本章节，写入 GitHub Release 与 MySQL `release_notes`。
-
-
-## 1.26.727.15（2026-07-27）
-
-### 版本号与在线更新
-
-- **版本精确到小时：** 软件版本第四段由日级改为小时（`主版本.年份.月日.小时`，如 `1.26.727.15`），安装包文件名与 About「检查更新」比对口径一致。
-- **检查更新：** About 界面支持查询云端 `releases` 表、下载 GitHub 安装包并以静默方式启动安装；发布流程同步写入 GitHub Release 与 MySQL。
-
-### 光源
-
-- **结束验布后再开始验布光源不亮：** 修复 `bfsmV1` / `devlight` 在结束验布只关灯不关串口、开始验布因时序未 `turnOnAll` 的问题；串口打开失败后清理错误状态以便重试。
-
-### ERP
-
-- **周期任务间隔：** `erp_upload` / `erp_webupload` / `erp_backup` 等按系统参数读取间隔（秒），不再固定 600s。
-- **脚本执行日志：** 补充 `jobId`、退出码、stdout/stderr 等摘要，便于排查上传成败。
-
-### 稳定性与相机
-
-- **ImageObjectPool 随机闪退：** 修复停机还池 / 辅图池化场景下错误释放导致的堆损坏（`c0000374`）。
-- **相机触发间距报警：** IKap 相邻发图 Y 间距过短跳过发图并报 `CAM_TRIGGER_INTERVAL_TOO_SHORT`；过长仍发图并报 `CAM_TRIGGER_INTERVAL_TOO_LONG`。
-- **ESC 打印机报警：** 未连接时状态栏提示 `ESC_PRINTER_ERROR`，连接恢复后自动清除。
-
-### 业务与页面
-
-- **换卷 / 导出疵点：** 完善换卷疵点按 Remarks 更新与导出时疵点数据保存。
-- **称重流程：** 梳理并加固 WeightMode（收卷/放卷）开卷称重、无布停机与净重落库路径。
-- **疵点汇总统计页：** 新增 `bfsdefectstats`（`/newviews/defectstats`），按日期/款号/缸号/匹号汇总疵点并支持导出。
 
 
 ## 1.26.707.0（2026-07-07）
