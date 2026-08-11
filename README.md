@@ -62,10 +62,10 @@
 
 | 设备 ID | 通道 | 存储键 | 兼容旧版本 |
 |---------|------|--------|-----------|
-| 1 | 0 | `LastSaveBrightness` | ✅ |
-| 2 | 0 | `LastSaveBrightness2` | ✅ |
-| 1 | 1 | `LastSaveBrightness_1` | ✅（devlight3 原有） |
-| 2 | 1 | `LastSaveBrightness2_1` | ✅（devlight3 原有） |
+| 1 | 0 | `LastSaveBrightness` | 兼容 |
+| 2 | 0 | `LastSaveBrightness2` | 兼容 |
+| 1 | 1 | `LastSaveBrightness_1` | 兼容（devlight3 原有） |
+| 2 | 1 | `LastSaveBrightness2_1` | 兼容（devlight3 原有） |
 | 3 | 0 | `LastSaveBrightness3` | 新增 |
 | 1 | 2 | `LastSaveBrightness_2` | 新增 |
 
