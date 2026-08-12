@@ -1,5 +1,15 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.0812.150505（2026-08-12）
+
+### 帮助页（newhelp）参数说明与设置优化
+
+- **艾科一代裁剪：** 修正 `IKapCameraLeftCrop0/RightCrop0` 等注释歧义（按相机左/右侧裁边，非左/右相机）；界面按相机分行；参数 key 统一蓝色标签样式。
+- **ERP 任务总开关：** 增加周期设置 `ERPUploadInterval` / `ERPUploadToWebInterval` / `ERPBackupInterval` / `ERPBullmerUploadInterval`（秒），与 `task_erp_base` 对齐；任务循环内重读，一般无需重启。
+- **相机类型/参数：** 按机型整理说明（`bfsmV1` / `bfsmV1Online` / `bfsmV1Sp` / `bfsmDual2` / `bfsmV1Cam4`），明确 `MachineProject` 与 `CameraDeviceType` 取值差异；下拉选项按机型分组（含 42 / 811 / 888）。
+
+---
+
 ## 1.26.0812.113154（2026-08-12）
 
 ### fg1（通耐）工厂定制
