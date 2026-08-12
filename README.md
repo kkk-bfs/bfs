@@ -1,23 +1,18 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.0812.113154（2026-08-12）
 
+### fg1（通耐）工厂定制
 
-## 1.26.0811.170000（2026-08-11）
+- **工厂目录：** 新增 `erpinterface/fg1`，机型对接 `bfsmV1`（`MachineProject=0`），`init_db.py` / `database_maintain.sql` 一键切换工厂与报告参数。
+- **结束录入布封：** `IsErpFinishInput=1`，结束检验录入「布封宽度」写入 `AdditionalData`；`reportgen.py` 按 report3 出报告并对检出幅宽做布封减宽。
+- **美标四分制：** `FourPointsMode=3` + `reportcalc.py`，对齐系统默认 `FourPointsUSStrategy`（按英寸扣分、每码上限 4、百平方码结论）；日志按天保留。
+- **疵点列表：** 补充通耐 8 类疵点（含新建 `K1-7` / `K1-4-6` / `K6-3-3` / `K5-6`），`defect_order.json` 控制人工标注顺序。
+- **安装包：** 精简版 ISS 增加 `erpinterface\fg1` 打包条目。
 
-### 发布与安装包
+---
 
-- **要点：** 发布成功后自动向钉钉群发送版本更新消息与下载链接，便于现场及时获取安装包。
-- `publish_github_release.bat` 在 GitHub Release + MySQL 同步成功后调用 `PublicServer/send_dingding.py --release`。
-- 可用 `BFS_SKIP_DINGDING=1` 跳过钉钉通知；钉钉失败不影响已完成的发布。
-
-### 加载等待提示增强
-
-- **要点：** 长耗时操作可显示等待动画并在后台执行，关闭窗口时更安全地结束等待。
-- `LoadingHint` 支持运行中更新文案；新增 `OperationWaitingHint` 包装异步操作等待。
-
-### 相机采集与编码器相关
-
-- **要点：** 优化 IKap 裁剪相机采集路径，并增加 503 端口独立编码器服务与快速快照，降低网络轮询对检测线程的影响。
+## 1.26.811.0（2026-08-11）
 
 ### 光源控制多通道统一与亮度恢复修复
 
@@ -62,10 +57,10 @@
 
 | 设备 ID | 通道 | 存储键 | 兼容旧版本 |
 |---------|------|--------|-----------|
-| 1 | 0 | `LastSaveBrightness` | 兼容 |
-| 2 | 0 | `LastSaveBrightness2` | 兼容 |
-| 1 | 1 | `LastSaveBrightness_1` | 兼容（devlight3 原有） |
-| 2 | 1 | `LastSaveBrightness2_1` | 兼容（devlight3 原有） |
+| 1 | 0 | `LastSaveBrightness` | ✅ |
+| 2 | 0 | `LastSaveBrightness2` | ✅ |
+| 1 | 1 | `LastSaveBrightness_1` | ✅（devlight3 原有） |
+| 2 | 1 | `LastSaveBrightness2_1` | ✅（devlight3 原有） |
 | 3 | 0 | `LastSaveBrightness3` | 新增 |
 | 1 | 2 | `LastSaveBrightness_2` | 新增 |
 
