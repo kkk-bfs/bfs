@@ -1,5 +1,17 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.0820.120218（2026-08-20）
+
+### 人工看板
+
+- **上下偏移分开：** 人工添加疵点看板的 top / bottom 偏移独立可调（`MaunalCheckBoardOffset` / `MaunalCheckBoardOffset2`），帮助页可直接改宽度与偏移并立刻生效。
+
+### ERP（茂路）
+
+- **条码备注：** 扫码把成分、仓库、库位写入备注（Remarks），不再占用 AdditionalData；AdditionalData 仍用于结束录入左右布边 mm。
+
+---
+
 ## 1.26.0820.115158（2026-08-20）
 
 ### ERP（茂路）
