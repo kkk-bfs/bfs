@@ -1,5 +1,16 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.0827.104001（2026-08-27）
+
+### 检测机型 — bfsmV1Pro
+
+- **Common 流水线：** 新增 V1 单线 Pro 机型，检测主链路改由 `CommonDetectionPipeline` 组装（布边 → 预处理 → 多 detector → 归并 → 后处理）。
+- **启用方式：** 参数 `use_machine_pro=1`（机型仍为 V1）。V1Sp 同样用该开关走 `bfsmV1SpPro`。默认 0 仍用原 `bfsmV1` / `bfsmV1Sp`。
+- **并行推理：** 同一来源可配置多个独立 CommonDetect worker，共享预处理、各自候选队列；数量沿用 `IsEnableHengtianDualProcess`。
+- **生命周期：** `wait()` 只排空不杀线程，`stop()` 下游到上游停止；实时状态图像队列计入 Common `ImageDispatcher` topic。
+
+---
+
 ## 1.26.0827.102526（2026-08-27）
 
 ### 称重标定
