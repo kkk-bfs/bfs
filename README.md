@@ -2,6 +2,11 @@
 
 ## 1.26.0904.114014（2026-09-04）
 
+### 德语界面
+
+- **新增德语：** 系统语言支持 `de-DE`（Deutsch）；桌面下拉、Web 导航栏、检测设置、缸报告/疵点统计、检验字段 CSV、报告 `reportlang-de.dat`、PLC `msg_de` 一并接入。
+- **拉丁语样式：** 德语复用 `StyleSheet*_vi.css`、按钮换行与 Segoe UI 缩小字号；切换语言后须重启软件。
+
 ### V2 贴标流程
 
 - **独立任务结构：** 新增 `TryLabellingBaseV2` 公共贴标任务基类，`TryLabellingV2` 和 `TryLabelling4V2` 仅保留任务身份及名称，不复制状态机，也不继承旧 `TryLabellingBase`。
