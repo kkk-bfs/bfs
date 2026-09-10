@@ -1,9 +1,28 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.0910.132915（2026-09-10）
+
+### 贴标位置
+
+- **角点可配：** 系统参数 `TicketLabelCorner`（0左上/1左下默认/2右上/3右下/4中心），默认由左上改为左下。
+- **锚点偏移：** 新增 `TicketLabelAnchorOffsetX/Y`（相对角点，通常≤标签尺寸/50mm）；与系统偏移分离。
+- **最终坐标：** `tx/ty = 角点 + AnchorOffset + TicketOffset/ClothStopOffset`（线1 用 `*2`）。
+
+### 贴标其它
+
+- **大疵点间隔贴标放开工厂限制：** 开启 `IsEnableLargeDefectMultiTicket` 后即可按 X 方向间隔多点贴标，不再限定远东（yuandong）ERP 目录。
+- **旧贴标流程注释：** `beginLabelingImpl` 补充 Y 最小间距分组（`EdgeTicketYMinRange`）与布边贴标规则说明。
+
+### 暂停关灯
+
+- **减速不冲掉暂停态：** 点暂停后减速期间 PLC 仍报运行时，不再把 `machine_state` 误恢复为验布中，避免漏关灯。
+- **策略统一：** 暂停态恢复规则抽到 `PauseMachineStatePolicy`，PLC 读状态与延迟关灯共用。
+
 ## 1.26.0910.092502（2026-09-10）
 
 ### 贴标
 
+- **贴标位置角点可配：** 新增系统参数 `TicketLabelCorner`（0左上/1左下默认/2右上/3右下/4中心）；贴标坐标 = 所选角点 + 相对角点的 X/Y 偏移（`TicketOffset`/`ClothStopOffset`），默认由左上改为左下角点。
 - **大疵点间隔贴标放开工厂限制：** 开启 `IsEnableLargeDefectMultiTicket` 后即可按 X 方向间隔多点贴标，不再限定远东（yuandong）ERP 目录。
 - **旧贴标流程注释：** `beginLabelingImpl` 补充 Y 最小间距分组（`EdgeTicketYMinRange`）与布边贴标规则说明，便于现场对照日志。
 
