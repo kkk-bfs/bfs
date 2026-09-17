@@ -1,5 +1,11 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.0917.092150（2026-09-17）
+
+### CMT 疵点
+
+- **人工标注 4 类：** Insect Spot、Softness Stain、White Patches、Abrasion Mark 写入 CMT 疵点库。前三类为新建 ID（不在 17-label 模型中），擦伤复用 `K8-6`。重启验布机或执行 `erpinterface/cmt/init_db.py` 后，可在疵点设置中勾选并手工标注。
+
 ## 1.26.0916.173231（2026-09-16）
 
 ### 通耐 FGL 报告
