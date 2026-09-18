@@ -1,5 +1,21 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.0918.163436（2026-09-18）
+
+### 触摸板映射与标定
+
+- **只覆盖看板高度：** U/V 按触摸板有效长度映射到布面，不再把拼图 top/bottom 扩展算进覆盖高度。
+- **上沿 topY：** `topY = stopy + TouchPadActualOffsetY`（`stopy = CurrentY − ClothStopOffset`），再由 V 换算实际 Y。
+- **标定同口径：** 调试页计算 OffsetU/V 使用同一 `topY` / `boardCoverMm`，左右约 OffsetU、上下约 OffsetV。
+
+## 1.26.0918.163113（2026-09-18）
+
+### 触摸板映射范围
+
+- **只覆盖 500mm 看板本体：** U/V 按 `ManualCheckBoardWidht` 映射，不再把 top/bottom 拼图扩展算进触摸板高度。
+- **上沿 topY：** `topY = stopy + TouchPadActualOffsetY`（`stopy = CurrentY − ClothStopOffset`），再由 V 换算布面 Y。
+- **标定同步：** 调试页反算 OffsetU/V 使用同一 topY / boardCoverMm，避免 Y 方向比例被拉长。
+
 ## 1.26.0918.154127（2026-09-18）
 
 ### 触摸板坐标原点
