@@ -1,6 +1,22 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.0922.083401（2026-09-22）
+
+### 触摸板九点标定
+
+- **仿射映射：** 调试页增加九点标定，拟合触摸板坐标到斜面物理坐标的仿射矩阵；新增疵点取点走该矩阵。
+- **单点仍保留：** 单点标定继续只矫正平移（OffsetU/V）。九点不用 OffsetU/V，平移在仿射 a13/a23。
+- **斜面原点：** `topY = CurrentY − ClothStopOffset`，`leftX = 0`；疵点布面坐标减 topY 得到斜面位置。
+- **去掉布面附加偏移：** 坐标转换不再使用 `TouchPadActualOffsetX/Y`；单点 `topY = stopy`，帮助页可编辑九点参数 `TouchPadCalibMode` / `TouchPadAffineMatrix`。
+
 ## 1.26.0921.171126（2026-09-21）
+
+### 触摸板九点标定
+
+- **仿射映射：** 调试页增加九点标定，拟合触摸板坐标到斜面物理坐标的仿射矩阵；新增疵点取点走该矩阵。
+- **单点仍保留：** 单点标定继续只矫正平移（OffsetU/V）。九点不用 OffsetU/V，平移在仿射 a13/a23。
+- **斜面原点：** `topY = CurrentY − ClothStopOffset`，`leftX = 0`；疵点布面坐标减 topY 得到斜面位置。
+- **去掉布面附加偏移：** 坐标转换不再使用 `TouchPadActualOffsetX/Y`；单点 `topY = stopy`，帮助页可编辑九点参数 `TouchPadCalibMode` / `TouchPadAffineMatrix`。
 
 ### 茂路检验记录
 
