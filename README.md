@@ -1,5 +1,14 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.0923.100155（2026-09-23）
+
+### 多语言界面
+
+- **非中文隐藏帮助：** 非中文界面不再显示标题栏「帮助」按钮。
+- **英文 Logo：** 非中文界面使用英文 Logo，并保持宽高比不拉伸。
+- **帮助页中英切换：** 帮助页可在中文/英文之间切换。
+- **关于页随语言：** 关于页按钮和更新说明按中/英加载。
+
 ## 1.26.0922.171355（2026-09-22）
 
 ### 帮助页
@@ -922,14 +931,14 @@
 
 #### 存储键兼容性
 
-| 设备 ID | 通道 | 存储键 | 兼容旧版本 |
-|---------|------|--------|-----------|
-| 1 | 0 | `LastSaveBrightness` | ✅ |
-| 2 | 0 | `LastSaveBrightness2` | ✅ |
-| 1 | 1 | `LastSaveBrightness_1` | ✅（devlight3 原有） |
-| 2 | 1 | `LastSaveBrightness2_1` | ✅（devlight3 原有） |
-| 3 | 0 | `LastSaveBrightness3` | 新增 |
-| 1 | 2 | `LastSaveBrightness_2` | 新增 |
+| 设备 ID | 通道 | 存储键                  | 兼容旧版本          |
+| ------- | ---- | ----------------------- | ------------------- |
+| 1       | 0    | `LastSaveBrightness`    | ✅                   |
+| 2       | 0    | `LastSaveBrightness2`   | ✅                   |
+| 1       | 1    | `LastSaveBrightness_1`  | ✅（devlight3 原有） |
+| 2       | 1    | `LastSaveBrightness2_1` | ✅（devlight3 原有） |
+| 3       | 0    | `LastSaveBrightness3`   | 新增                |
+| 1       | 2    | `LastSaveBrightness_2`  | 新增                |
 
 不需要数据迁移，`m_activeChannelCount` 默认 1 时行为与原版本完全一致。
 
@@ -1061,12 +1070,12 @@ devices["devlight1"] = light1;
 
 #### 机型装配清单
 
-| 机型 | 设备键名 | 类型 | 通道数 | 亮度恢复位置 |
-|------|---------|------|--------|-------------|
-| bfsmV1 | devlight1 | devlight / devlight2 | 1（可配 2） | 基类 `open()` |
-| bfsmDual2 | devlight1 | devlight | 1 | 基类 `open()` |
-| bfsmDual2 | devlight2 | devlight3 | 2 | devlight3 `init()` |
-| bfsmV1Sp | devlight1 | devlight3 | 2 | devlight3 `init()` |
+| 机型      | 设备键名  | 类型                 | 通道数      | 亮度恢复位置       |
+| --------- | --------- | -------------------- | ----------- | ------------------ |
+| bfsmV1    | devlight1 | devlight / devlight2 | 1（可配 2） | 基类 `open()`      |
+| bfsmDual2 | devlight1 | devlight             | 1           | 基类 `open()`      |
+| bfsmDual2 | devlight2 | devlight3            | 2           | devlight3 `init()` |
+| bfsmV1Sp  | devlight1 | devlight3            | 2           | devlight3 `init()` |
 
 > **注**：`open()` 中 `turnOnAll()` 会打开全部 16 通道（每个通道等待 100ms 串口写完成），后续优化建议改为 `turnOn()` 仅打开 `m_activeChannelCount` 个活跃通道，减少启动耗时。
 
@@ -1215,13 +1224,13 @@ ealdefects.Title / defects.Name 仍存中文；展示、报告、CSV、Web API�
 
 **流水线架构（edge → detect → merge）：**
 
-| 阶段 | 组件 | 职责 |
-| --- | --- | --- |
-| 入队 | `task_camera_feed_pro` | IKap（camtype=8）或 datamode=2 相机帧写入 `Line{N}` |
-| 布边 | `task_edge_detect_pro` | 计算 `edgeLeft`/`edgeRight`，线程池执行自动调光缩略图 |
+| 阶段 | 组件                                 | 职责                                                             |
+| ---- | ------------------------------------ | ---------------------------------------------------------------- |
+| 入队 | `task_camera_feed_pro`               | IKap（camtype=8）或 datamode=2 相机帧写入 `Line{N}`              |
+| 布边 | `task_edge_detect_pro`               | 计算 `edgeLeft`/`edgeRight`，线程池执行自动调光缩略图            |
 | 检测 | `Detect_*_pro` + `task_detector_pro` | 推理 + `DefectFilter` 过滤 + 异步存图，结果写入 `Line{N}Temp{i}` |
-| 归并 | `task_merge_detect_pro` | 按 `yHead` 合并多 worker，**不在此阶段过滤** |
-| 下游 | `TryLabelling` / `ImageSave` | 贴标、落库、PLC/ERP（与 V1 一致） |
+| 归并 | `task_merge_detect_pro`              | 按 `yHead` 合并多 worker，**不在此阶段过滤**                     |
+| 下游 | `TryLabelling` / `ImageSave`         | 贴标、落库、PLC/ERP（与 V1 一致）                                |
 
 **核心改进：**
 
@@ -1234,13 +1243,13 @@ ealdefects.Title / defects.Name 仍存中文；展示、报告、CSV、Web API�
 
 **主要参数：**
 
-| 参数 | 默认 | 说明 |
-| --- | --- | --- |
-| `bfsmV1.usePro` | 0 | 1 启用 bfsmV1Pro |
-| `bfsmV1Pro.lineId` | 0 | 流水线线号 |
-| `bfsmV1Pro.detectorNum` | 1 | 并行 worker 数（1–8） |
-| `bfsmV1Pro.stopInflightWaitMs` | 15000 | 停机等待 inflight 清空超时（ms） |
-| `bfsmV1Pro.inflightStaleMs` | 0 | merge 被 inflight 卡住时的 watchdog（0=关闭） |
+| 参数                           | 默认  | 说明                                          |
+| ------------------------------ | ----- | --------------------------------------------- |
+| `bfsmV1.usePro`                | 0     | 1 启用 bfsmV1Pro                              |
+| `bfsmV1Pro.lineId`             | 0     | 流水线线号                                    |
+| `bfsmV1Pro.detectorNum`        | 1     | 并行 worker 数（1–8）                         |
+| `bfsmV1Pro.stopInflightWaitMs` | 15000 | 停机等待 inflight 清空超时（ms）              |
+| `bfsmV1Pro.inflightStaleMs`    | 0     | merge 被 inflight 卡住时的 watchdog（0=关闭） |
 
 详细设计见 `PublicFabricScanner/bfsmV1Pro/bfsmV1Pro.md`。
 
@@ -1269,10 +1278,10 @@ ealdefects.Title / defects.Name 仍存中文；展示、报告、CSV、Web API�
 
 **主要参数：**
 
-| 参数 | 默认 | 说明 |
-| --- | --- | --- |
-| `bfsmV1.stopInflightWaitMs` | 10000 | 停机等待在飞检测结束超时（ms） |
-| `bfsmV1.inflightStaleMs` | 0 | merge 被 inflight 卡住时的兜底超时（ms），0=关闭 |
+| 参数                        | 默认  | 说明                                             |
+| --------------------------- | ----- | ------------------------------------------------ |
+| `bfsmV1.stopInflightWaitMs` | 10000 | 停机等待在飞检测结束超时（ms）                   |
+| `bfsmV1.inflightStaleMs`    | 0     | merge 被 inflight 卡住时的兜底超时（ms），0=关闭 |
 
 **与 bfsmV1Pro 的关系：** 归并算法与 Pro 共用 `task_merge_detect_pro`；legacy 路径仍使用原 `Detect`/`task_detector` 全链路，仅多 worker 时在检测与贴标之间插入 temp+merge 层。
 
@@ -1346,10 +1355,10 @@ ealdefects.Title / defects.Name 仍存中文；展示、报告、CSV、Web API�
 
 **旁路报告（与 `.dmp` 同目录）：**
 
-| 文件 | 内容 |
-| --- | --- |
+| 文件                         | 内容                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------- |
 | `{timestamp}.dmp.crash.json` | 异常码/地址、故障线程名、进程线程列表（含是否主线程）、已加载模块、业务快照 |
-| `{timestamp}.dmp.crash.txt` | 上述信息的纯文本摘要，便于现场直接打开 |
+| `{timestamp}.dmp.crash.txt`  | 上述信息的纯文本摘要，便于现场直接打开                                      |
 
 **业务快照（`business` 字段）包括：** `machine_state`、`CurrentY`、`quitapp`、`ImageObjectPool` 池状态（key 数量/占用）、模型状态等，辅助区分「CEF/检测/内存池」类问题。
 
