@@ -1,5 +1,39 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.1012.095609（2026-10-12）
+
+### 双面贴标
+
+- **线0等线1检完再合批：** 线0要等布面坐标走过线1，并且线1该位置已经检完，才和线1合成一批去贴标。每一批都写日志，方便核对有没有提前贴。
+
+### 不停机贴标
+
+- **可按整数米或码贴：** 不停机贴标可设为按长度贴。每到下一个整数米或整数码贴一次，并记下扫到的二维码。不按疵点贴。长度单位在开卷时锁定。
+
+### 检验记录
+
+- **结论和疵点跟当前语言：** 检验记录里的结论标准名和疵点名按当前语言显示，以前保存的记录也能对上。
+
+### 全图预览
+
+- **设备一动就关掉预览：** 全图预览开着时，检测到设备移动会自动关闭。
+
+### 光源
+
+- **沃德普无应答会报错：** 打开光源后，亮度探测没有应答会报错。调试页可以查看光源通讯。调光写入后会读回应答并记到日志。
+
+### 茂路
+
+- **触摸笔多次量净幅宽：** 停机后可用触摸笔多次测量净幅宽，报告里取平均值。
+
+### 调试
+
+- **可看机器信息：** 增加机器信息调试页，按组显示设备任务说明。
+
+### 布面位置
+
+- **坐标改由快速通道发布：** 运行中的布面坐标改为 currentY 快读。快读超时或断开时自动退回原来的状态通道，避免位置停在旧值。
+
 ## 1.26.1009.103951（2026-10-09）
 
 ### 色差报告
@@ -752,6 +786,36 @@
 ### 布尾到位停机
 
 - **多语言提示：** 布尾到位停机 MessageBox 补齐英/越/葡/德语文案，不再显示键名。
+
+## 1.26.0909.1730（2026-09-08）
+### 503 CurrentY 实时发布
+
+- **职责分离：** 502 通道继续每约 60 ms 读取完整 PLC 状态，维护 `fallback502`、传感器、速度、`PulseWidth`、`FabricLength` 和其它寄存器；502 不再在每次解析时无条件覆盖公开 `CurrentY`。
+- **快速主来源：** 503 通道每 5～10 ms 校验编码器响应并直接发布 `CurrentY`，不经过 queued signal，也不等待下一轮 502 解析。503 有效期间，502 只更新回退上下文。
+- **统一路由：** 新增 `CurrentYRouter`，统一管理 `Port502` / `Port503` 来源、当前公开值、503 代次、最后样本时间和回退原因；`SharedData::CurrentY` 保留为兼容镜像，运行时通过线程安全接口读取。
+- **位置存储拆分：** 新增 `CurrentYPositionStore`，从 `SharedData` 内部承接 CurrentY 快照、发布时间、速度、布长/编码器配套字段和位置历史；`SharedData::currentY()`、`currentYPositionSnapshot()` 继续保留为统一公共入口。
+- **Pulse 模式：** 使用当前 502 上下文中的方向、编码器值和脉冲宽度，在每个 503 样本到达时计算并发布 `direction * encoder * pulseWidth`。
+- **DirectRegister 模式：** 使用 503 本次 FC03 响应中的 `0x1D/0x1E` CurrentY 寄存器值；寄存器无效时立即回退 502。
+- **ClothSensorAccumulator 模式：** 首个样本或新代次只建立编码器基准，并从当前 502 累加值初始化；后续仅在有布且 `machine_state == 1` 时累加 503 编码器增量，断线期间的位移不会在重连后补算。
+- **主动失效：** 503 样本最大允许年龄为 `100 ms`。请求超时、Socket/Modbus 错误、时间戳倒退、TCP 断开或服务停止时立即切换到 502；失效操作幂等，恢复后的首个有效样本建立新代次并重新切回 503。
+- **位置历史：** 快速发布同步维护位置样本历史，供相机按帧时间进行插值/外推；503 不覆盖 502 主状态中的 `EncoderValue`、传感器、速度和其它 PLC 字段。
+- **线程安全：** `CurrentYRouter` 使用 `QMutex` 保护复合路由状态；`SharedData::currentY()` / `setCurrentY()` 保护兼容镜像，避免 502 与 503 并发写入产生回跳或撕裂。
+- **位置快照接口：** 新增 `SharedData::CurrentYPositionSnapshot` 及 `currentYPositionSnapshot()`，一次返回同一发布版本的 `currentY`、时间戳和 `speedValue`；需要时间外推、速度补偿或位置插值时必须使用该接口，不能分别读取三个字段。
+- **事件位置/布长同步：** 位置快照同时携带同一发布版本的 `fabricLength`、编码器、来源和代次。503 有效时，事件布长由本次 503 编码器与 502 脉冲当量计算；503 未启用或失效时使用 502 回退布长。全局 `SharedData::FabricLength` 仍只由 502 更新，普通报告布长口径不变。
+- **无布/断布/跨卷边界：** 无布确认、断布确认和手动结单统一只读取一次位置快照，并成对记录 `NoClothStopY` 与 `NoClothStopFabricLength`；断布驳口队列复用同一快照的 Y，避免疵点按 503 坐标分卷、幅宽和色差却按旧 502 布长分卷。
+- **布长单位统一：** `NoClothStopFabricLength` 内部统一使用毫米，实时接口确认无布时也执行米到毫米转换。
+- **比例同步：** `FabricCyRatio` 使用同一位置快照中的 Y 和布长计算，不再混用 503 最新坐标与上一周期的 502 布长。
+- **兼容 setter 边界：** `setCurrentY()` 只更新兼容镜像，不更新 `yPosFlushTime`、位置历史或 CurrentY 路由状态；它还用于 JSON/配置恢复，自动改时间会覆盖持久化的时间锚点。运行时位置复位、模拟步进、手动设值统一使用 `setCurrentYPositionSnapshot()` 或 `CurrentYRouter::publishExternal502()`。
+- **估算器归属：** `CurrentYPositionEstimator.{h,cpp}` 已放入 `Camera/common`，作为相机公共位置估算模块；相机和 CameraV2 通过该模块统一执行 `yPosFlushTime` 回退外推及可选历史插值。
+- **`publishExternal502()` 使用场景：** 复位、回零、换卷、模拟步进、手动设置编码器以及其它会改变位置基准的运行时操作，必须调用 `CurrentYRouter::instance().publishExternal502(currentY, encoderValue, speedValue, fabricLength)`。该接口会同步更新 502 回退值、来源、代次、快速累加器、位置历史、诊断字段和 `SharedData::CurrentY` 兼容镜像，并使旧的 503 快速代次失效。
+- **与 `setCurrentY()` 的区别：** `setCurrentY()` 通过 `CurrentYPositionStore` 更新 `SharedData::CurrentY` 兼容镜像，不更新发布时间、路由来源、503 freshness、代次、累加器或位置历史。因此它仅用于配置/JSON 反序列化和测试初始化等镜像赋值场景，不能替代运行时的 `publishExternal502()`。
+- **统一读取接口：** 不需要时间外推的业务、控制、贴标、检测、日志和接口读取统一使用线程安全的 `SharedData::currentY()`；需要将位置与发布时刻、速度配对读取时，统一使用 `SharedData::currentYPositionSnapshot()`，一次取得 `currentY`、时间戳和速度，禁止再分别读取 `CurrentY`、`SpeedValue`、`yPosFlushTime`。路由器内部状态需要同时读取来源或代次时使用 `CurrentYRouter::snapshot()` / `CurrentYRouter::currentY()`。禁止新增或继续使用 `SharedData::CurrentY` 直接字段读取，避免绕过路由和并发保护。
+- **诊断字段：** 运行时写入 `devices.plc.currentY.source`、`fallbackReason`、`generation` 和 `last503TimestampMs`，便于现场确认当前来源、代次和回退原因。
+- **路由监控字段：** 监控全局变量同时发布 `published`、`fallback502`、`fast503`、`fastAccumulator`、`fastEncoder`、`fast503Enabled`、`fast503Ready` 和 `fallback502TimestampMs`。路由切换时立即更新，503 高频采样值按状态刷新周期更新，避免监控写入影响快读线程。
+- **相机统一位置入口：** 普通 IKap、分时 IKap 和 CameraV2 不再直接读取 503 快照；503 只通过 `CurrentYRouter` 更新统一的 `SharedData::currentY()`，异常时自动使用 502 回退值。
+- **相机外推兼容：** 相机原有 `yPosFlushTime` 外推公式继续保留，默认不启用历史插值，避免改变既有相机坐标行为。
+- **可选历史插值：** `Camera.YPosinterpolation` 默认关闭；普通 IKap、分时 IKap 和 CameraV2 在打开相机时读取该配置。开启后，相机使用 CurrentYRouter 发布到 `SharedData` 的位置历史进行有限插值/外推；历史无效或超出窗口时自动回退到 `currentYPositionSnapshot()` 提供的 `currentY + speedValue * (captureTime - timestamp)` 公式。
+- **模拟相机一致性：** `DALSASim` 和 `SimCameraSp` 也使用同一位置估算器，便于在 502 回退、503 快速发布和历史插值两种模式下进行模拟回归。
 
 ## 1.26.0908.121728（2026-09-08）
 
