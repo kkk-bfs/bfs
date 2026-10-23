@@ -1,5 +1,13 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.1023.164228（2026-10-23）
+
+### ERP 接口配置
+
+- **疵点顺序分组：** 和泰 / 报喜鸟 / CMT 的 `defect_order.json` 补齐 `groups`，人工添加疵点类型弹窗可按分组筛选。
+- **云端仓同步页：** 新增 `/views/erpinterface_files`，可查看 MySQL 中各厂 ERP 配置文件，一键云端→本地，或密码确认后本地→云端。
+- **上传脚本：** `scripts/erpinterface` 可将各客户 `erpinterface` 重要配置同步到 `mdksys.erpinterface_*` 表。
+
 ## 1.26.1023.142357（2026-10-23）
 
 ### 人工添加疵点 / 净幅宽
