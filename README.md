@@ -1,5 +1,13 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.1103.143401（2026-11-03）
+
+### 稳定性 / CEF（Win11 外语）
+
+- **CEF 语言钉死：** 浏览器内部固定 `en-US`，不再跟随系统 UI 语言去加载缺失的 `vi/pt/de.pak`，减少 `CrBrowserMain` 的 `EXCEPTION_BREAKPOINT` 闪退。
+- **异常路径收敛：** VEH 不再在异常上下文写 dump / 调 Qt / `Rip+1` 强行续跑；CEF 异常只记标志并走正常落盘，避免外语/UTF-8 代码页二次崩溃。
+- **精简包装 CEF 资源：** 安装包打入 `locales`（en-US/zh-CN/vi/pt-PT/de）及 `libcef`/`icudtl`/`resources.pak` 等运行时文件。
+
 ## 1.26.1103.115817（2026-11-03）
 
 ### 相机
