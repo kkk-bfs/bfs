@@ -1,5 +1,13 @@
 ﻿# 验布机软件更新说明
 
+## 1.26.1105.124600（2026-11-05）
+
+### 光源 / ASCII
+
+- **应答不抢读：** ASCII 指令改为标记位跳过 `readyRead` 槽，不再 `blockSignals`，避免 `waitForReadyRead` 丢应答。
+- **嵌套读保护：** 同一串口同时只允许一次读应答；亮度确认窗口可配（`AsciiBrightnessAckMs`）。
+- **跨线程写串口：** `sendAsciiCommandNoWait` 投递到设备线程执行，避免 HTTP/任务线程与读循环交叉。
+
 ## 1.26.1105.121100（2026-11-05）
 
 ### 光源（同步自 bfs）
