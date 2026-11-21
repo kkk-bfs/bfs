@@ -1,0 +1,4188 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CustomUIV3 · SpaceX HUD</title>
+  <style>
+    :root {
+      --space-black: #000000;
+      --spectral: #f0f0fa;
+      --muted: rgba(240, 240, 250, 0.55);
+      --ghost-surface: rgba(240, 240, 250, 0.08);
+      --ghost-border: rgba(240, 240, 250, 0.28);
+      --ghost-border-strong: rgba(240, 240, 250, 0.35);
+      --overlay: rgba(0, 0, 0, 0.45);
+      --hud-panel: rgba(0, 0, 0, 0.28);
+      --hud-panel-hover: rgba(240, 240, 250, 0.1);
+      --ok: #3ddc97;
+      --warn: #f5c542;
+      --bad: #ff4d4f;
+      --progress-track: rgba(240, 240, 250, 0.18);
+      --progress-fill: #f0f0fa;
+      --font: "Bahnschrift", "DIN Alternate", "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--space-black);
+      color: var(--spectral);
+      font-family: var(--font);
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button { font-family: inherit; cursor: pointer; }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      min-height: 640px;
+      background: var(--space-black);
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 56px;
+      max-height: 64px;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.72);
+      border-bottom: 1px solid rgba(240, 240, 250, 0.18);
+      z-index: 20;
+    }
+
+    .header-left,
+    .header-center,
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .header-left { gap: 12px; }
+    .header-center { justify-content: center; flex-wrap: wrap; }
+    .header-right { justify-content: flex-end; flex-wrap: wrap; }
+
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--spectral);
+    }
+
+    .mono {
+      font-size: 13px;
+      letter-spacing: 1px;
+      color: rgba(240, 240, 250, 0.75);
+    }
+
+    .device-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px 6px 10px;
+      background: var(--ghost-surface);
+      border: 1px solid var(--ghost-border);
+      border-radius: 4px;
+      transition: background 160ms ease;
+      max-width: 220px;
+    }
+
+    .device-chip:hover { background: rgba(240, 240, 250, 0.16); }
+
+    .device-chip .value {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid rgba(240, 240, 250, 0.35);
+      background: #6b6b75;
+      flex-shrink: 0;
+    }
+    .dot.ok { background: var(--ok); }
+    .dot.warn { background: var(--warn); }
+    .dot.bad { background: var(--bad); }
+
+    .label {
+      font-size: 11px;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: var(--spectral);
+    }
+
+    .lang-select,
+    .ghost-btn,
+    .run-btn {
+      background: var(--ghost-surface);
+      color: var(--spectral);
+      border: 1px solid var(--ghost-border);
+      border-radius: 22px;
+      padding: 8px 16px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+    }
+
+    .lang-select {
+      border-radius: 4px;
+      min-width: 120px;
+      min-height: 36px;
+      appearance: none;
+      padding-right: 28px;
+      background-image: linear-gradient(45deg, transparent 50%, var(--spectral) 50%),
+        linear-gradient(135deg, var(--spectral) 50%, transparent 50%);
+      background-position: calc(100% - 14px) 55%, calc(100% - 10px) 55%;
+      background-size: 4px 4px, 4px 4px;
+      background-repeat: no-repeat;
+    }
+
+    .ghost-btn:hover,
+    .lang-select:hover { background-color: rgba(240, 240, 250, 0.16); }
+
+    .ghost-btn:active { background-color: rgba(240, 240, 250, 0.22); }
+
+    /* ── Stage ── */
+    .stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--space-black);
+    }
+
+    .fabric {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 18%, transparent 55%, rgba(0,0,0,0.72) 100%),
+        repeating-linear-gradient(
+          90deg,
+          #1a1a22 0px,
+          #1a1a22 18px,
+          #15151c 18px,
+          #15151c 36px
+        ),
+        repeating-linear-gradient(
+          0deg,
+          rgba(240, 240, 250, 0.04) 0px,
+          rgba(240, 240, 250, 0.04) 1px,
+          transparent 1px,
+          transparent 28px
+        );
+      background-size: auto, 36px 100%, 100% 28px;
+      animation: fabric-scroll 18s linear infinite;
+    }
+
+    .fabric.paused { animation-play-state: paused; }
+
+    @keyframes fabric-scroll {
+      from { background-position: 0 0, 0 0, 0 0; }
+      to { background-position: 0 0, 0 0, 0 560px; }
+    }
+
+    .fabric-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(240, 240, 250, 0.35);
+      font-size: 14px;
+      pointer-events: none;
+    }
+
+    .defect-mark {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border: 1px solid rgba(255, 77, 79, 0.9);
+      background: rgba(255, 77, 79, 0.25);
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    .defect-mark.selected {
+      border-color: var(--warn);
+      background: rgba(245, 197, 66, 0.3);
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      50% { transform: translate(-50%, -50%) scale(1.15); opacity: 0.75; }
+    }
+
+    .hud-panel {
+      position: absolute;
+      top: 16px;
+      bottom: 16px;
+      width: clamp(220px, 18vw, 280px);
+      background: var(--hud-panel);
+      border: 1px solid var(--ghost-border);
+      border-radius: 4px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 10;
+    }
+
+    .hud-panel.map { left: 16px; }
+    .hud-panel.list { right: 16px; width: clamp(240px, 20vw, 300px); }
+
+    .hud-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .list-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .list-actions .ghost-btn {
+      flex: 1;
+      padding: 6px 10px;
+      border-radius: 4px;
+      min-height: 32px;
+      font-size: 12px;
+      letter-spacing: 0.8px;
+    }
+
+    .map-canvas {
+      flex: 1;
+      min-height: 120px;
+      margin-top: 4px;
+      border: 1px solid rgba(240, 240, 250, 0.18);
+      background: rgba(0, 0, 0, 0.12);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .map-point {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--bad);
+      border: 1px solid rgba(240, 240, 250, 0.5);
+      transform: translate(-50%, -50%);
+    }
+
+    .map-point.selected { background: var(--warn); }
+
+    .defect-list {
+      list-style: none;
+      flex: 1;
+      overflow: auto;
+      margin-top: 4px;
+    }
+
+    .defect-list li {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(240, 240, 250, 0.08);
+      letter-spacing: 0.6px;
+      cursor: pointer;
+      transition: background 140ms ease;
+    }
+
+    .defect-list li:hover,
+    .defect-list li.active { background: var(--hud-panel-hover); }
+
+    .defect-list::-webkit-scrollbar { width: 6px; }
+    .defect-list::-webkit-scrollbar-thumb {
+      background: rgba(240, 240, 250, 0.22);
+      border-radius: 3px;
+    }
+
+    /* ── Bottom HUD ── */
+    .bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+      min-height: 0;
+      max-height: 128px;
+      padding: 4px 8px;
+      background: rgba(0, 0, 0, 0.72);
+      border-top: 1px solid rgba(240, 240, 250, 0.18);
+      z-index: 20;
+    }
+
+    .side-col {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      justify-content: center;
+      align-self: center;
+      min-width: 0;
+      height: auto;
+      max-height: 100%;
+    }
+
+    /* 5 列 × 2 行；列优先：先填最外侧列，再往中间填 */
+    .side-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-rows: repeat(2, auto);
+      grid-auto-flow: column;
+      align-content: center;
+      gap: 4px;
+      width: 100%;
+      height: auto;
+      min-height: 0;
+    }
+
+    .side-col.side-left .side-grid {
+      direction: ltr;
+    }
+
+    .side-col.side-right .side-grid {
+      direction: rtl; /* 最右列为第一列，先填满再往左 */
+    }
+
+    .side-col.side-right .chip {
+      direction: ltr;
+    }
+
+    .chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      box-sizing: border-box;
+      min-width: 0;
+      width: 100%;
+      height: auto;
+      min-height: 40px;
+      padding: 4px 4px;
+      background: var(--ghost-surface);
+      border: 1px solid var(--ghost-border);
+      border-radius: 4px;
+      text-align: center;
+      color: inherit;
+      font: inherit;
+      transition: background 160ms ease;
+    }
+
+    .chip:hover { background: rgba(240, 240, 250, 0.16); }
+
+    .chip .label {
+      font-size: 10px;
+      letter-spacing: 0.4px;
+      line-height: 1.05;
+      transform: scale(0.95);
+      transform-origin: center bottom;
+    }
+
+    .chip .chip-value {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      color: var(--spectral);
+      word-break: break-all;
+      line-height: 1.1;
+    }
+
+    .chip.span-2 { grid-row: 1 / -1; grid-column: span 2; }
+    .chip.chip-fp {
+      min-height: 40px;
+      gap: 2px;
+    }
+    .chip-fp-vals {
+      display: inline-flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 2px;
+      font-size: 13px !important;
+      font-weight: 700;
+      line-height: 1.15;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .chip-fp-vals .fp-sep {
+      color: var(--muted);
+      font-weight: 600;
+      margin: 0 1px;
+    }
+    .chip-fp-vals .fp-ok { color: var(--ok); }
+    .chip-fp-vals .fp-ng { color: var(--bad); }
+    /* 报警芯片：单行紧凑，避免 span-2 双行过高被中间晕影盖住 */
+    .chip.alarm-chip {
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+      text-align: left;
+      padding: 4px 8px;
+      min-height: 40px;
+      max-height: 40px;
+      min-width: 0;
+      overflow: hidden;
+      grid-column: span 2;
+      grid-row: auto;
+    }
+    .chip.alarm-chip .label {
+      flex: 0 0 auto;
+      text-align: left;
+      transform: none;
+      font-size: 10px;
+      opacity: 0.75;
+    }
+    .chip.alarm-chip .chip-value {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      word-break: normal;
+      line-height: 1.2;
+    }
+    .chip.alarm-chip.active {
+      border-color: rgba(255, 77, 79, 0.65);
+      background: rgba(255, 77, 79, 0.12);
+    }
+    .chip.alarm-chip.active .chip-value {
+      color: #FF4D4F;
+    }
+    .alarm-ticker-viewport {
+      display: block;
+      overflow: hidden;
+      width: 100%;
+      mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+    }
+    .alarm-ticker-track {
+      display: inline-block;
+      padding-left: 100%;
+      animation: spx-alarm-marquee 12s linear infinite;
+    }
+    .chip.alarm-chip:not(.active) .alarm-ticker-track {
+      padding-left: 0;
+      animation: none;
+    }
+    @keyframes spx-alarm-marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+
+    .center-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      align-self: center;
+      gap: 3px;
+      min-width: 0;
+      width: 100%;
+      height: auto;
+      max-height: 100%;
+    }
+
+    .meter-row {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      flex-wrap: nowrap;
+      width: 100%;
+    }
+
+    /* 横排：标签 + 数值 + 单位，单行放大字号不抬高 */
+    .meter {
+      flex: 1 1 0;
+      min-width: 0;
+      max-width: 160px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--ghost-border);
+      background: var(--ghost-surface);
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      justify-content: center;
+      gap: 4px;
+      color: inherit;
+      font: inherit;
+      white-space: nowrap;
+    }
+
+    .meter .label {
+      font-size: 11px;
+      letter-spacing: 0.4px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .meter .meter-value {
+      display: inline-flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 2px;
+      line-height: 1;
+      min-width: 0;
+    }
+
+    .meter .chip-value {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      font-variant-numeric: tabular-nums;
+      color: var(--spectral);
+      line-height: 1;
+    }
+
+    .meter .meter-unit {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0;
+      color: var(--muted);
+      text-transform: none;
+      flex-shrink: 0;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      width: 100%;
+      flex-shrink: 0;
+    }
+
+    .action-row .ghost-btn,
+    .action-row .run-btn {
+      min-width: 108px;
+      min-height: 40px;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .action-row .run-btn,
+    .action-row #btnRun {
+      min-width: 216px;
+    }
+
+    /* 主操作语义色：新建轻提亮 / 启动绿 / 暂停红 / 结束琥珀 */
+    .action-row .act-new {
+      background: rgba(240, 240, 250, 0.12);
+      border-color: rgba(240, 240, 250, 0.48);
+    }
+    .action-row .act-new:hover {
+      background: rgba(240, 240, 250, 0.2);
+    }
+
+    .action-row .act-finish {
+      background: rgba(245, 197, 66, 0.12);
+      border-color: rgba(245, 197, 66, 0.55);
+      color: #f5d97a;
+    }
+    .action-row .act-finish:hover {
+      background: rgba(245, 197, 66, 0.2);
+    }
+
+    .run-btn {
+      background: rgba(61, 220, 151, 0.14);
+      border: 1px solid rgba(61, 220, 151, 0.55);
+      color: #9aefc9;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .run-btn:hover { background: rgba(61, 220, 151, 0.22); }
+
+    .run-btn.running {
+      background: rgba(255, 77, 79, 0.18);
+      border-color: rgba(255, 77, 79, 0.65);
+      color: #ffb4b4;
+    }
+    .run-btn.running:hover {
+      background: rgba(255, 77, 79, 0.26);
+    }
+
+    .progress-wrap {
+      width: 100%;
+      height: 16px;
+      border: 1px solid var(--ghost-border);
+      border-radius: 4px;
+      background: var(--progress-track);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--progress-fill);
+      border-radius: 3px;
+      transition: width 280ms ease;
+    }
+
+    .progress-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      color: var(--spectral);
+      mix-blend-mode: difference;
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(12px);
+      padding: 10px 18px;
+      background: rgba(0, 0, 0, 0.78);
+      border: 1px solid var(--ghost-border-strong);
+      border-radius: 4px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+      z-index: 30;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 1200px) {
+      .header { padding: 6px 8px; gap: 6px; }
+      .device-chip { padding: 5px 8px; gap: 6px; }
+      .device-chip .value { font-size: 12px; }
+      .ghost-btn, .lang-select { padding: 6px 12px; }
+      .lang-select { min-width: 96px; }
+      .hud-panel.map, .hud-panel.list {
+        width: min(200px, 22vw);
+        top: 10px;
+        bottom: 10px;
+      }
+      .hud-panel.map { left: 10px; }
+      .hud-panel.list { right: 10px; }
+      .meter { min-width: 64px; }
+      .bottom {
+        grid-template-columns: 1fr 1fr 1fr;
+        max-height: 120px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .header-right .ghost-btn:nth-child(n+3):nth-child(-n+4) { display: none; }
+      .logo { font-size: 15px; letter-spacing: 2px; }
+      .mono { font-size: 11px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .fabric, .defect-mark { animation: none !important; }
+    }
+
+    /* ── Popup (SpaceX shell · viewsvue fields) ── */
+    .spx-popup-root {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+    }
+    .spx-popup-root[hidden] { display: none !important; }
+    /* 旁挂详情：不挡列表操作、不抢焦点 */
+    .spx-popup-root.modeless {
+      pointer-events: none;
+      background: transparent;
+    }
+    .spx-popup-root.modeless .spx-popup-mask {
+      display: none;
+    }
+    .spx-popup-root.modeless .spx-popup-shell {
+      pointer-events: auto;
+    }
+    .spx-popup-mask {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+    }
+    .spx-popup-shell {
+      position: fixed;
+      display: flex;
+      flex-direction: column;
+      background: rgba(8, 8, 10, 0.96);
+      border: 1px solid rgba(240, 240, 250, 0.28);
+      border-radius: 4px;
+      color: var(--spectral);
+      overflow: hidden;
+      box-shadow: none;
+      z-index: 101;
+    }
+    /* 检验记录 / 疵点设置：居中铺满中间区时略透明 */
+    .spx-popup-shell.center {
+      background: rgba(8, 8, 10, 0.78);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    /* 系统消息弹窗（无布停机/结检/取样等）：略透明 */
+    .spx-popup-shell.info {
+      background: rgba(8, 8, 10, 0.78);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    .spx-popup-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px 10px 16px;
+      background: rgba(0, 0, 0, 0.55);
+      border-bottom: 1px solid rgba(240, 240, 250, 0.18);
+    }
+    .spx-popup-title {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+    .spx-popup-close {
+      width: 44px;
+      height: 44px;
+      border-radius: 22px;
+      border: 1px solid var(--ghost-border);
+      background: var(--ghost-surface);
+      color: var(--spectral);
+      font-size: 22px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .spx-popup-close:hover { background: rgba(255, 77, 79, 0.25); }
+    .spx-popup-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 12px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .spx-section {
+      color: rgba(240, 240, 250, 0.75);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding-bottom: 4px;
+    }
+    .spx-kv, .spx-field {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 0;
+    }
+    .spx-field { flex-wrap: wrap; }
+    .spx-field.inline { flex: 1; justify-content: flex-start; }
+    .spx-k { color: var(--muted); letter-spacing: 1px; text-transform: uppercase; font-size: 11px; min-width: 72px; }
+    .spx-v { font-weight: 700; letter-spacing: 0.8px; }
+    .spx-field input, .spx-field select,
+    .spx-popup-body input[type="text"],
+    .spx-popup-body input[type="password"],
+    .spx-popup-body input[type="number"],
+    .spx-popup-body select {
+      flex: 1;
+      min-width: 120px;
+      background: rgba(240, 240, 250, 0.06);
+      color: var(--spectral);
+      border: 1px solid rgba(240, 240, 250, 0.22);
+      border-radius: 4px;
+      padding: 6px 8px;
+      font: inherit;
+    }
+    .spx-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 8px;
+    }
+    .spx-actions.center {
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .spx-popup-shell.info .spx-popup-body {
+      justify-content: center;
+      gap: 14px;
+    }
+    .spx-defect-thumb {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      margin: 2px 0 6px;
+      background: rgba(240, 240, 250, 0.06);
+      border: 1px solid rgba(240, 240, 250, 0.18);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      letter-spacing: 1px;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    .spx-actions.split {
+      justify-content: space-between;
+    }
+    .spx-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex: 1;
+      min-height: 0;
+      text-align: center;
+      padding: 8px 4px 0;
+    }
+    .spx-info-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 24px;
+      border: 2px solid var(--warn);
+      color: var(--warn);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0;
+      flex-shrink: 0;
+    }
+    .spx-info-icon.warn {
+      border-color: var(--warn);
+      color: var(--warn);
+      background: rgba(245, 197, 66, 0.12);
+    }
+    .spx-info .spx-msg {
+      max-width: 360px;
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--spectral);
+    }
+    .spx-info-check {
+      justify-content: center;
+      gap: 8px;
+      color: rgba(240, 240, 250, 0.85);
+      font-size: 13px;
+      letter-spacing: 0.4px;
+      text-transform: none;
+    }
+    .spx-info .spx-actions {
+      width: 100%;
+      margin-top: 4px;
+    }
+    .spx-info .spx-actions .ghost-btn,
+    .spx-info .spx-actions .run-btn {
+      min-width: 88px;
+      min-height: 40px;
+      padding: 8px 14px;
+    }
+    .demo-show {
+      position: absolute;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      z-index: 8;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+      max-width: min(920px, calc(100% - 24px));
+      padding: 4px 8px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(240, 240, 250, 0.18);
+      border-radius: 4px;
+      pointer-events: auto;
+    }
+    .demo-show .demo-label {
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      margin-right: 2px;
+    }
+    .demo-show .ghost-btn {
+      min-height: 28px;
+      padding: 4px 8px;
+      font-size: 11px;
+      letter-spacing: 0.4px;
+    }
+    .spx-about-test {
+      background: #c62828;
+      color: #fff;
+      font-weight: 700;
+      text-align: center;
+      padding: 6px 10px;
+      border-radius: 4px;
+      letter-spacing: 0.6px;
+      margin: 4px 0 8px;
+    }
+    .spx-about-notes {
+      max-height: 160px;
+      overflow: auto;
+      padding: 8px 10px;
+      margin: 4px 0 8px;
+      background: rgba(240, 240, 250, 0.05);
+      border: 1px solid rgba(240, 240, 250, 0.16);
+      border-radius: 4px;
+      color: rgba(240, 240, 250, 0.82);
+      line-height: 1.45;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    .spx-about-btns {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      padding: 4px 0;
+    }
+    .spx-about-btns .ghost-btn {
+      min-width: 108px;
+    }
+    .spx-msg { color: rgba(240, 240, 250, 0.75); letter-spacing: 0.6px; line-height: 1.5; }
+    .spx-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--spectral);
+      padding: 4px 0;
+    }
+    .spx-switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .spx-switch input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      margin: 0;
+    }
+    .spx-switch-track {
+      display: block;
+      width: 44px;
+      height: 24px;
+      border-radius: 999px;
+      background: rgba(240, 240, 250, 0.16);
+      border: 1px solid rgba(240, 240, 250, 0.28);
+      transition: background 0.18s ease, border-color 0.18s ease;
+      position: relative;
+    }
+    .spx-switch-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(240, 240, 250, 0.75);
+      transition: transform 0.18s ease, background 0.18s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+    .spx-switch input:checked + .spx-switch-track {
+      background: rgba(61, 220, 151, 0.35);
+      border-color: rgba(61, 220, 151, 0.85);
+    }
+    .spx-switch input:checked + .spx-switch-track .spx-switch-thumb {
+      transform: translateX(20px);
+      background: #3DDC97;
+    }
+    .spx-switch input:focus-visible + .spx-switch-track {
+      outline: 1px solid rgba(240, 240, 250, 0.55);
+      outline-offset: 2px;
+    }
+    .spx-settings-row .spx-switch {
+      margin-left: auto;
+    }
+    .spx-ctrl-row {
+      display: grid;
+      grid-template-columns: 72px 36px 1fr 36px 72px;
+      gap: 8px;
+      align-items: center;
+    }
+    .spx-ctrl-row input[type="range"] { width: 100%; }
+    .mini-btn {
+      min-width: 36px;
+      height: 32px;
+      padding: 0 8px;
+      border-radius: 6px;
+      border: 1px solid var(--ghost-border);
+      background: var(--ghost-surface);
+      color: var(--spectral);
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .mini-btn:hover { background: rgba(240, 240, 250, 0.16); }
+    .mini-btn.danger { background: rgba(255, 77, 79, 0.22); border-color: rgba(255, 77, 79, 0.55); }
+    .mini-btn.ok { background: rgba(61, 220, 151, 0.18); border-color: rgba(61, 220, 151, 0.5); }
+    .spx-preset { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ghost-btn.compact { padding: 6px 12px; border-radius: 16px; min-width: 48px; }
+
+    /* PLC 快设 — 对齐 bfsplcfast.html；触摸友好间距 + 行撤销 */
+    .spx-plc-hint {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.4px;
+    }
+    .spx-plc-ctrl {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 14px;
+    }
+    .spx-plc-ctrl td { vertical-align: middle; }
+    .spx-plc-label {
+      width: 88px;
+      text-align: right;
+      padding-right: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .spx-plc-slider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-width: 180px;
+    }
+    .spx-plc-slider input[type="range"] {
+      flex: 1;
+      height: 28px;
+      accent-color: #f0f0fa;
+    }
+    .spx-plc-val {
+      min-width: 72px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .spx-plc-presets {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(40px, 1fr));
+      gap: 8px;
+      min-width: 220px;
+      padding-right: 8px;
+      border-right: 1px solid rgba(240, 240, 250, 0.12);
+    }
+    .spx-plc-chip {
+      min-width: 0;
+      width: 100%;
+      height: 40px;
+      padding: 0 4px;
+      border-radius: 6px;
+      border: 1px solid rgba(59, 130, 246, 0.55);
+      background: rgba(59, 130, 246, 0.35);
+      color: var(--spectral);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .spx-plc-chip:hover { background: rgba(59, 130, 246, 0.5); }
+    .spx-plc-undo-cell {
+      width: 72px;
+      padding-left: 8px;
+    }
+    .spx-plc-undo {
+      width: 100%;
+      min-width: 64px;
+      height: 40px;
+      padding: 0 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(245, 197, 66, 0.55);
+      background: rgba(245, 197, 66, 0.18);
+      color: #f5c542;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .spx-plc-undo:hover:not(:disabled) { background: rgba(245, 197, 66, 0.3); }
+    .spx-plc-undo:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+    .spx-plc-msg {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .spx-plc-msg.ok { color: var(--ok); }
+    .spx-plctest { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 6px; padding: 6px 8px 4px; }
+    .spx-plct-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+    .spx-plct-tile { border: 1px solid var(--ghost-border); background: var(--ghost-surface); border-radius: 3px; padding: 3px 4px; text-align: center; min-width: 0; }
+    .spx-plct-tile.warn { border-color: rgba(255, 77, 79, 0.55); background: rgba(255, 77, 79, 0.12); }
+    .spx-plct-tile .cap { font-size: 10px; color: var(--muted); }
+    .spx-plct-tile .val { font-size: 13px; font-weight: 600; color: var(--spectral); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .spx-plct-main { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1; min-height: 0; }
+    .spx-plct-debug { display: flex; flex-direction: column; gap: 5px; flex: 1.15; min-height: 0; border-top: 1px solid rgba(240,240,250,0.14); padding-top: 5px; }
+    .spx-plct-cmds { display: flex; flex-wrap: wrap; gap: 4px; }
+    .spx-plct-cmds .ghost-btn.ok, .spx-plct-row .ghost-btn.ok { color: var(--ok); border-color: rgba(61, 220, 151, 0.45); }
+    .spx-plct-cmds .ghost-btn.danger, .spx-plct-row .ghost-btn.danger { color: var(--bad); border-color: rgba(255, 77, 79, 0.45); }
+    .spx-plct-debug-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1; min-height: 0; }
+    .spx-plct-panel { display: flex; flex-direction: column; gap: 4px; min-height: 0; border: 1px solid var(--ghost-border); border-radius: 3px; background: rgba(0,0,0,0.22); padding: 5px 6px; overflow: auto; }
+    .spx-plct-h { font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
+    .spx-plct-live { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; }
+    .spx-plct-live.compact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .spx-plct-kv { display: flex; justify-content: space-between; gap: 4px; font-size: 11px; min-width: 0; }
+    .spx-plct-kv .k { color: var(--muted); }
+    .spx-plct-kv .v { color: var(--spectral); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .spx-plct-params { display: flex; flex-direction: column; gap: 3px; }
+    .spx-plct-params.dense .spx-plct-param { grid-template-columns: minmax(52px, 0.75fr) 1.25fr; }
+    .spx-plct-param { display: grid; grid-template-columns: minmax(64px, 0.85fr) 1.15fr; align-items: center; gap: 4px; font-size: 11px; }
+    .spx-plct-param .k { color: var(--muted); }
+    .spx-plct-param .k em { font-style: normal; opacity: 0.7; font-size: 9px; }
+    .spx-plct-param .ctrl { display: flex; gap: 3px; min-width: 0; }
+    .spx-plct-inp { flex: 1; min-width: 0; height: 24px; padding: 0 6px; border: 1px solid var(--ghost-border); border-radius: 2px; background: rgba(0,0,0,0.35); color: var(--spectral); font: inherit; font-size: 11px; }
+    .spx-plct-sys { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; }
+    .spx-plct-check { display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; user-select: none; }
+    .spx-plct-row { display: flex; flex-wrap: wrap; gap: 3px; }
+    .spx-plct-row .ghost-btn.compact, .spx-plct-cmds .ghost-btn.compact { padding: 3px 7px; font-size: 11px; min-height: 24px; }
+    .spx-plct-msg { font-size: 11px; min-height: 1.1em; color: var(--muted); }
+    .spx-plct-msg.ok { color: var(--ok); }
+    .spx-cam-preview {
+      height: 180px;
+      border: 1px solid var(--ghost-border);
+      border-radius: 4px;
+      background:
+        linear-gradient(135deg, rgba(240,240,250,0.04), transparent 40%),
+        repeating-linear-gradient(90deg, #15151c 0 12px, #1a1a22 12px 24px);
+      position: relative;
+    }
+    .spx-cam-meta {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      padding: 4px 8px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid var(--ghost-border);
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+    .spx-light-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .spx-light-card {
+      padding: 10px;
+      border: 1px solid var(--ghost-border);
+      border-radius: 4px;
+      background: var(--ghost-surface);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .spx-light-card.active {
+      border-color: rgba(240, 240, 250, 0.55);
+      background: rgba(240, 240, 250, 0.12);
+    }
+    .spx-color-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      max-width: 100%;
+    }
+    .spx-swatch {
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      margin: 0;
+      border: 1px solid rgba(240, 240, 250, 0.35);
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0;
+      color: #fff;
+      text-shadow: 0 0 2px #000, 0 1px 2px rgba(0, 0, 0, 0.85);
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+    .spx-swatch.selected {
+      border-color: #4da3ff;
+      box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.45);
+      transform: scale(1.06);
+    }
+    .spx-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .spx-table th, .spx-table td {
+      border-bottom: 1px solid rgba(240, 240, 250, 0.1);
+      padding: 8px 6px;
+      text-align: left;
+    }
+    .spx-table th {
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 600;
+      background: rgba(240, 240, 250, 0.06);
+      position: sticky;
+      top: 0;
+    }
+    .spx-table.compact input {
+      background: rgba(240, 240, 250, 0.06);
+      color: var(--spectral);
+      border: 1px solid rgba(240, 240, 250, 0.22);
+      border-radius: 4px;
+      padding: 4px;
+      font: inherit;
+    }
+
+    /* ── Defect settings · SPX table ── */
+    .spx-defect-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+      flex: 1;
+      height: 100%;
+    }
+    .spx-defect-panel .spx-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .spx-defect-panel .spx-toolbar .spx-field.inline {
+      flex: 1;
+      min-width: 200px;
+    }
+    .spx-toolbar-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .spx-defect-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      border: 1px solid rgba(240, 240, 250, 0.16);
+      border-radius: 4px;
+    }
+    .spx-defect-table {
+      table-layout: fixed;
+      margin: 0;
+    }
+    .spx-defect-table th,
+    .spx-defect-table td {
+      padding: 10px 8px;
+      vertical-align: middle;
+    }
+    .spx-defect-table .col-idx { width: 40px; text-align: center; color: var(--muted); }
+    .spx-defect-table .col-name { width: 12%; }
+    .spx-defect-table .col-sw { width: 80px; text-align: center; }
+    .spx-defect-table .col-prec { width: 18%; text-align: center; }
+    .spx-defect-table .col-step { width: 12%; text-align: center; }
+    .spx-defect-table th.col-sw,
+    .spx-defect-table th.col-prec,
+    .spx-defect-table th.col-step { text-align: center; }
+    .spx-defect-table td.col-sw .spx-switch {
+      margin: 0 auto;
+    }
+    .spx-def-prec {
+      display: grid;
+      grid-template-columns: 1fr 36px;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .spx-def-prec input[type="range"] {
+      width: 100%;
+      height: 28px;
+      accent-color: #f0f0fa;
+      margin: 0;
+    }
+    .spx-def-prec .spx-v {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+    }
+    .spx-def-step {
+      display: inline-grid;
+      grid-template-columns: 32px minmax(36px, auto) 32px;
+      align-items: center;
+      gap: 4px;
+      justify-content: center;
+    }
+    .spx-def-step .mini-btn {
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
+      padding: 0;
+      font-size: 16px;
+    }
+    .spx-def-step .spx-def-val {
+      width: 48px;
+      min-width: 36px;
+      height: 32px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      color: var(--spectral);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      background: transparent;
+      padding: 0 2px;
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    .spx-def-step .spx-def-val::-webkit-outer-spin-button,
+    .spx-def-step .spx-def-val::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .spx-def-step .spx-def-val:hover {
+      border-color: rgba(240, 240, 250, 0.18);
+      background: rgba(240, 240, 250, 0.04);
+    }
+    .spx-def-step .spx-def-val:focus {
+      outline: none;
+      border-color: rgba(240, 240, 250, 0.4);
+      background: rgba(240, 240, 250, 0.08);
+    }
+    .spx-defect-table tbody tr.on {
+      background: rgba(61, 220, 151, 0.05);
+    }
+    .spx-defect-table tbody tr:hover {
+      background: rgba(240, 240, 250, 0.06);
+    }
+    .spx-defect-table tbody tr.on:hover {
+      background: rgba(61, 220, 151, 0.08);
+    }
+    .spx-settings {
+      display: grid;
+      grid-template-columns: 168px 1fr;
+      gap: 0;
+      min-height: 280px;
+      flex: 1;
+      border: 1px solid var(--ghost-border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .spx-tabs {
+      display: flex;
+      flex-direction: column;
+      background: rgba(0, 0, 0, 0.45);
+      border-right: 1px solid rgba(240, 240, 250, 0.18);
+      overflow: auto;
+    }
+    .spx-tabs button {
+      text-align: left;
+      padding: 10px 12px;
+      background: transparent;
+      border: none;
+      border-right: 2px solid transparent;
+      color: rgba(240, 240, 250, 0.7);
+      letter-spacing: 0.6px;
+      text-transform: none;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .spx-tabs button.active {
+      color: var(--spectral);
+      background: rgba(240, 240, 250, 0.08);
+      border-right-color: var(--spectral);
+    }
+    .spx-tab-body {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: auto;
+    }
+    .spx-settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(240, 240, 250, 0.08);
+    }
+    .spx-settings-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 120px;
+      flex: 1;
+    }
+    .spx-settings-row .spx-check { padding: 0; }
+    .spx-settings-row .spx-switch { padding: 0; }
+    .spx-settings-row input[type="text"],
+    .spx-settings-row input[type="number"],
+    .spx-settings-row select {
+      flex: 0 1 220px;
+      max-width: 260px;
+    }
+    .spx-settings-sec {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 16px 0 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: none;
+      color: rgba(240, 240, 250, 0.82);
+    }
+    .spx-settings-sec::before,
+    .spx-settings-sec::after {
+      content: "";
+      height: 1px;
+      background: rgba(240, 240, 250, 0.28);
+    }
+    .spx-settings-sec::before { width: 14px; flex: 0 0 14px; }
+    .spx-settings-sec::after { flex: 1; }
+    .spx-param-key {
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 10px;
+      letter-spacing: 0;
+      text-transform: none;
+      color: rgba(120, 180, 255, 0.9);
+      background: rgba(120, 180, 255, 0.1);
+      border: 1px solid rgba(120, 180, 255, 0.25);
+      border-radius: 3px;
+      padding: 1px 5px;
+      width: fit-content;
+    }
+    .spx-barcode {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .spx-barcode input { flex: 1; }
+    .spx-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 12px;
+    }
+    .spx-form-grid.compact {
+      gap: 6px 10px;
+    }
+    .spx-form-grid.compact .spx-field {
+      padding: 2px 0;
+      gap: 6px;
+    }
+    .spx-form-grid.compact .spx-k { min-width: 56px; }
+    .spx-form-grid.compact input,
+    .spx-form-grid.compact select {
+      min-width: 0;
+      padding: 5px 8px;
+    }
+    .spx-sheet-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-width: 100%;
+    }
+    .spx-sheet-form .spx-section { padding-bottom: 2px; }
+    .spx-sheet-form .spx-fmr-row { gap: 8px; padding: 2px 0; }
+    .spx-sheet-form .spx-fmr-inputs { gap: 6px; }
+    .spx-sheet-form .spx-fmr-item input { padding: 5px 6px; }
+    .spx-popup-shell.form .spx-popup-body {
+      padding: 10px 14px 12px;
+    }
+
+    .spx-fp-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+      flex: 1;
+    }
+    .spx-fp-summary {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .spx-fp-result {
+      min-width: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      border: 1px solid var(--ghost-border);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    .spx-fp-result.ok {
+      color: var(--ok);
+      background: rgba(61, 220, 151, 0.12);
+      border-color: rgba(61, 220, 151, 0.45);
+    }
+    .spx-fp-result.bad {
+      color: var(--bad);
+      background: rgba(255, 77, 79, 0.12);
+      border-color: rgba(255, 77, 79, 0.45);
+    }
+    .spx-fp-kpis {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px 12px;
+    }
+    .spx-fp-grades {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .spx-fp-grade {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 8px 6px;
+      border: 1px solid rgba(240, 240, 250, 0.18);
+      border-radius: 4px;
+      background: rgba(240, 240, 250, 0.05);
+    }
+    .spx-fp-grade .spx-v { font-size: 18px; }
+    .spx-fp-table td, .spx-fp-table th { text-align: center; }
+    .spx-fp-table td:nth-child(2),
+    .spx-fp-table th:nth-child(2) { text-align: left; }
+
+    /* ── On-screen keyboard ── */
+    .spx-osk {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 120;
+      padding: 8px 10px 12px;
+      background: rgba(0, 0, 0, 0.92);
+      border-top: 1px solid rgba(240, 240, 250, 0.28);
+    }
+    .spx-osk[hidden] { display: none !important; }    .spx-osk-inner {
+      max-width: 980px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .spx-osk-inner.is-num {
+      width: 360px;
+      max-width: 360px;
+      gap: 8px;
+    }
+    .spx-osk-row {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+    }
+    .spx-osk-key {
+      min-width: 42px;
+      min-height: 44px;
+      padding: 0 10px;
+      border-radius: 6px;
+      border: 1px solid var(--ghost-border);
+      background: var(--ghost-surface);
+      color: var(--spectral);
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+    }
+        .spx-osk-inner.is-num .spx-osk-row {
+      gap: 8px;
+    }
+        .spx-osk-toolbar {
+      justify-content: flex-end;
+      min-height: 36px;
+    }
+    .spx-osk-key.close {
+      min-width: 44px;
+      max-width: 44px;
+      min-height: 36px;
+      padding: 0;
+      font-size: 18px;
+      border-radius: 6px;
+      background: rgba(240, 240, 250, 0.08);
+      color: rgba(240, 240, 250, 0.9);
+    }
+    .spx-osk-key.close:active {
+      background: rgba(255, 100, 100, 0.28);
+      border-color: rgba(255, 120, 120, 0.55);
+      color: #ff9a9a;
+    }
+    .spx-osk-key.num {
+      flex: 1;
+      min-width: 0;
+      min-height: 56px;
+      padding: 0;
+      border-radius: 8px;
+      font-size: 22px;
+    }
+    .spx-osk-key.num.special {
+      font-size: 15px;
+      letter-spacing: 0.5px;
+    }
+    .spx-osk-key.num.done {
+      font-size: 18px;
+    }
+    .spx-osk-key:active {
+      background: rgba(240, 240, 250, 0.22);
+    }
+    .spx-osk-key.active {
+      background: rgba(61, 220, 151, 0.28);
+      border-color: rgba(61, 220, 151, 0.55);
+      color: #3ddc97;
+    }
+    .spx-osk-key.special {
+      min-width: 56px;
+      color: rgba(240, 240, 250, 0.85);
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+    .spx-osk-key.space {
+      flex: 1;
+      max-width: 360px;
+      min-width: 120px;
+    }
+    .spx-osk-key.done {
+      min-width: 72px;
+      background: rgba(61, 220, 151, 0.22);
+      border-color: rgba(61, 220, 151, 0.55);
+      color: #3ddc97;
+    }
+    body.spx-osk-open .spx-popup-shell.form {
+      transition: top 120ms ease, height 120ms ease;
+    }
+    .spx-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .meter { cursor: pointer; }
+    .meter:hover { background: rgba(240, 240, 250, 0.16); }
+
+    .spx-fmr-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 0;
+    }
+    .spx-fmr-row > .spx-k { min-width: 48px; }
+    .spx-fmr-inputs {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .spx-fmr-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .spx-fmr-item > span {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .spx-fmr-item input {
+      width: 100%;
+      min-width: 0;
+      background: rgba(240, 240, 250, 0.06);
+      color: var(--spectral);
+      border: 1px solid rgba(240, 240, 250, 0.22);
+      border-radius: 4px;
+      padding: 6px 8px;
+      font: inherit;
+    }
+
+    .spx-chart {
+      margin-top: 8px;
+      padding: 8px 10px 10px;
+      border: 1px solid var(--ghost-border);
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.35);
+    }
+    .spx-chart-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .spx-chart-head .spx-k { letter-spacing: 1px; text-transform: uppercase; }
+    .spx-chart-head .spx-v { font-size: 12px; font-weight: 700; }
+    .spx-chart svg {
+      display: block;
+      width: 100%;
+      height: 140px;
+    }
+    .spx-chart-axis {
+      fill: rgba(240, 240, 250, 0.45);
+      font-size: 10px;
+      letter-spacing: 0.4px;
+    }
+    .spx-chart-grid {
+      stroke: rgba(240, 240, 250, 0.12);
+      stroke-width: 1;
+    }
+    .spx-chart-line {
+      fill: none;
+      stroke: #f0f0fa;
+      stroke-width: 2;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+    .spx-chart-line.alt {
+      stroke: #3ddc97;
+      stroke-width: 1.6;
+    }
+    .spx-chart-area {
+      fill: rgba(240, 240, 250, 0.08);
+    }
+    .spx-chart-dot {
+      fill: #f0f0fa;
+    }
+    .spx-chart-legend {
+      display: flex;
+      gap: 12px;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.6px;
+    }
+    .spx-chart-legend i {
+      display: inline-block;
+      width: 12px;
+      height: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+      background: #f0f0fa;
+    }
+    .spx-chart-legend i.alt { background: #3ddc97; }
+    .spx-stat-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .spx-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 8px 6px;
+      border: 1px solid var(--ghost-border);
+      border-radius: 4px;
+      background: rgba(240, 240, 250, 0.06);
+      text-align: center;
+    }
+    .spx-stat .spx-k {
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .spx-stat .spx-v {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Tool popups: DefectAidedSelection / artifical_add_* ── */
+    .spx-popup-shell.tool .spx-popup-body {
+      padding: 0;
+      gap: 0;
+      overflow: hidden;
+    }
+    .spx-muted { color: var(--muted); text-align: center; padding: 12px; }
+    .ghost-btn.compact.active,
+    .spx-art-toolbar .ghost-btn.active {
+      background: rgba(240, 240, 250, 0.22);
+      border-color: rgba(240, 240, 250, 0.55);
+    }
+
+    .spx-aided {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      gap: 8px;
+      padding: 10px 12px 12px;
+    }
+    .spx-aided-preview { flex: 0 0 auto; }
+    .spx-aided-main {
+      position: relative;
+      height: 72px;
+      border: 1px solid rgba(240, 240, 250, 0.22);
+      border-radius: 4px;
+      background:
+        linear-gradient(180deg, rgba(0,0,0,0.35), transparent 40%),
+        repeating-linear-gradient(90deg, #1a1a22 0 14px, #15151c 14px 28px);
+      overflow: hidden;
+    }
+    .spx-aided-main-hint {
+      position: absolute;
+      left: 10px;
+      top: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .spx-aided-mark {
+      position: absolute;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      margin: -5px 0 0 -5px;
+      border: 1px solid #ff4d4f;
+      background: rgba(255, 77, 79, 0.35);
+    }
+    .spx-aided-mark.on {
+      border-color: var(--warn);
+      background: rgba(245, 197, 66, 0.4);
+    }
+    .spx-aided-ruler {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 4px 0;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.6px;
+      border-top: 1px solid rgba(240, 240, 250, 0.18);
+      margin-top: 2px;
+    }
+    .spx-aided-mainrow {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr minmax(200px, 240px);
+      gap: 12px;
+    }
+    .spx-aided-cards {
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 10px;
+      overflow: auto;
+      padding: 2px;
+      border: 1px solid rgba(240, 240, 250, 0.12);
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .spx-aided-card {
+      width: calc(33.333% - 8px);
+      min-width: 160px;
+      max-width: 220px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(240, 240, 250, 0.22);
+      border-radius: 4px;
+      background: rgba(240, 240, 250, 0.06);
+      overflow: hidden;
+    }
+    .spx-aided-card.selected { border-color: rgba(61, 220, 151, 0.7); }
+    .spx-aided-card.ignored { opacity: 0.55; border-color: rgba(255, 77, 79, 0.35); }
+    .spx-aided-thumb {
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        linear-gradient(135deg, rgba(240,240,250,0.08), transparent 50%),
+        #15151c;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .spx-aided-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .spx-aided-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .spx-aided-badge {
+      font-size: 10px;
+      letter-spacing: 0.8px;
+      color: var(--warn);
+      border: 1px solid rgba(245, 197, 66, 0.45);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .spx-aided-coord { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .spx-aided-ops { display: flex; gap: 6px; }
+    .spx-aided-ops .mini-btn { flex: 1; height: 30px; }
+    .spx-aided-side {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 8px;
+      border: 1px solid rgba(240, 240, 250, 0.16);
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.28);
+    }
+    .spx-aided-confirm { min-height: 56px; width: 100%; letter-spacing: 2px; }
+    .spx-aided-info { display: flex; flex-direction: column; gap: 2px; }
+    .spx-aided-nav { display: flex; justify-content: space-between; gap: 8px; margin-top: auto; }
+
+    /* ── artifical_edit_defect：左地图 / 中列表 / 右信息 ── */
+    .spx-edit {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(160px, 2fr) minmax(220px, 3fr) minmax(240px, 2fr);
+      height: 100%;
+      min-height: 0;
+      gap: 8px;
+      padding: 8px;
+    }
+    .spx-edit-map {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      border: 1px solid rgba(240, 240, 250, 0.18);
+      border-radius: 4px;
+      background: #0c0c10;
+      overflow: hidden;
+    }
+    .spx-edit-map canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+    .spx-edit-map-hint {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      padding: 4px 8px;
+      border-radius: 3px;
+      background: rgba(0, 0, 0, 0.55);
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.6px;
+      pointer-events: none;
+    }
+    .spx-edit-list {
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      padding: 6px;
+      border: 1px solid rgba(240, 240, 250, 0.14);
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.28);
+    }
+    .spx-edit-group {
+      margin-bottom: 8px;
+      padding: 6px;
+      border: 1px solid rgba(240, 240, 250, 0.16);
+      border-radius: 4px;
+      background: rgba(240, 240, 250, 0.04);
+    }
+    .spx-edit-group.selected {
+      border-color: rgba(245, 197, 66, 0.45);
+      background: rgba(245, 197, 66, 0.08);
+    }
+    .spx-edit-group-title {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.8px;
+    }
+    .spx-edit-thumbs {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .spx-edit-thumb {
+      flex: 0 0 auto;
+      width: 72px;
+      padding: 4px;
+      border-radius: 4px;
+      border: 1px solid rgba(240, 240, 250, 0.22);
+      background: #121218;
+      color: var(--spectral);
+      font: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .spx-edit-thumb.selected {
+      border-color: #910905;
+      box-shadow: 0 0 0 1px #910905;
+    }
+    .spx-edit-thumb-img {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 56px;
+      margin-bottom: 4px;
+      border-radius: 3px;
+      background:
+        linear-gradient(135deg, rgba(240,240,250,0.08), transparent 55%),
+        #15151c;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .spx-edit-thumb-lab {
+      display: block;
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .spx-edit-info {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid rgba(240, 240, 250, 0.14);
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.28);
+      overflow: auto;
+    }
+    .spx-edit-preview {
+      aspect-ratio: 1 / 1;
+      max-height: 220px;
+      margin: 0 auto;
+      width: min(100%, 220px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(240, 240, 250, 0.18);
+      border-radius: 4px;
+      background: #15151c;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .spx-edit-form {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 10px;
+      align-items: center;
+      font-size: 12px;
+    }
+    .spx-edit-form label { color: var(--muted); white-space: nowrap; }
+    .spx-edit-form input,
+    .spx-edit-form select,
+    .spx-edit-form textarea {
+      width: 100%;
+      min-height: 32px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(240, 240, 250, 0.22);
+      background: rgba(240, 240, 250, 0.06);
+      color: var(--spectral);
+      font: inherit;
+    }
+    .spx-edit-form textarea { resize: vertical; min-height: 48px; }
+    .spx-edit-desc-lab { align-self: start; padding-top: 6px; }
+    .spx-edit-actions { margin-top: auto; }
+
+    .spx-art {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr minmax(260px, 320px);
+      grid-template-rows: 1fr auto;
+      height: 100%;
+      min-height: 0;
+    }
+    .spx-art-left {
+      grid-row: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      border-right: 1px solid rgba(240, 240, 250, 0.14);
+    }
+    .spx-art-toolbar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(240, 240, 250, 0.14);
+      background: rgba(0, 0, 0, 0.35);
+    }
+    .spx-art-sep {
+      width: 1px;
+      height: 22px;
+      background: rgba(240, 240, 250, 0.2);
+      margin: 0 4px;
+    }
+    .spx-art-stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: #0c0c10;
+    }
+    .spx-art-stage canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    .spx-art-hint {
+      position: absolute;
+      left: 50%;
+      top: 12px;
+      transform: translateX(-50%);
+      padding: 6px 12px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(240, 240, 250, 0.22);
+      border-radius: 4px;
+      color: var(--spectral);
+      font-size: 12px;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    .spx-art-right {
+      grid-row: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+      padding: 10px 12px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.28);
+    }
+    .spx-art-thumb {
+      position: relative;
+      height: 72px;
+      border: 1px solid rgba(240, 240, 250, 0.18);
+      border-radius: 4px;
+      background: #15151c;
+      overflow: hidden;
+    }
+    .spx-art-thumb-vp {
+      position: absolute;
+      border: 1px solid var(--warn);
+      background: rgba(245, 197, 66, 0.15);
+      min-width: 18%;
+      min-height: 16%;
+    }
+    .spx-art-table-wrap {
+      flex: 1;
+      min-height: 80px;
+      overflow: auto;
+      border: 1px solid rgba(240, 240, 250, 0.12);
+      border-radius: 4px;
+    }
+    .spx-art-table-wrap tr.active { background: rgba(245, 197, 66, 0.12); }
+    .spx-art-preview { display: flex; flex-direction: column; gap: 6px; }
+    .spx-art-preview .spx-defect-thumb { aspect-ratio: 16 / 7; margin: 0; }
+    .spx-art-label-row { display: flex; gap: 8px; }
+    .spx-art-label-row .ghost-btn { flex: 1; min-height: 36px; }
+    .spx-art-ops { display: flex; gap: 4px; white-space: nowrap; }
+    .spx-art-imgtype { display: flex; gap: 4px; }
+    .spx-art-loading,
+    .spx-art-saving {
+      position: absolute; inset: 0; z-index: 20;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+      background: rgba(8, 8, 10, 0.72); color: var(--spectral); font-size: 14px;
+    }
+    .spx-art-loading[hidden], .spx-art-saving[hidden] { display: none !important; }
+    .spx-art-spinner {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 3px solid rgba(240, 240, 250, 0.15); border-top-color: var(--warn);
+      animation: spx-art-spin 0.9s linear infinite;
+    }
+    .spx-art-progress {
+      width: min(280px, 60%); height: 4px; border-radius: 2px; overflow: hidden;
+      background: rgba(240, 240, 250, 0.12);
+    }
+    .spx-art-progress::after {
+      content: ""; display: block; width: 40%; height: 100%;
+      background: var(--warn); animation: spx-art-bar 1.2s ease-in-out infinite;
+    }
+    @keyframes spx-art-spin { to { transform: rotate(360deg); } }
+    @keyframes spx-art-bar {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(280%); }
+    }
+    .spx-art-modal {
+      position: absolute; inset: 0; z-index: 30;
+      display: none; align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.55); padding: 16px;
+    }
+    .spx-art-modal.active { display: flex; }
+    .spx-art-modal-card {
+      width: min(420px, 100%); max-height: 90%;
+      display: flex; flex-direction: column; gap: 12px;
+      padding: 14px 16px; border-radius: 6px;
+      border: 1px solid rgba(240, 240, 250, 0.28);
+      background: rgba(18, 18, 24, 0.96); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
+    .spx-art-modal-card.wide { width: min(720px, 100%); }
+    .spx-art-modal-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: 15px; letter-spacing: 1px; color: var(--spectral);
+    }
+    .spx-art-modal-x {
+      width: 32px; height: 32px; border: none; border-radius: 4px;
+      background: transparent; color: var(--spectral); font-size: 22px; cursor: pointer;
+    }
+    .spx-art-modal-x:hover { background: rgba(240, 240, 250, 0.12); }
+    .spx-art-modal-msg { color: var(--muted); line-height: 1.5; font-size: 13px; }
+    .spx-art-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .spx-art-filter { display: flex; flex-wrap: wrap; gap: 6px; }
+    .spx-art-chip {
+      padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(240, 240, 250, 0.28);
+      background: rgba(240, 240, 250, 0.06); color: var(--spectral); font: inherit; font-size: 12px; cursor: pointer;
+    }
+    .spx-art-chip.active, .spx-art-chip:hover {
+      background: rgba(245, 197, 66, 0.18); border-color: rgba(245, 197, 66, 0.55);
+    }
+    .spx-art-type-wrap { overflow: auto; min-height: 0; max-height: min(52vh, 420px); display: flex; flex-direction: column; gap: 12px; }
+    .spx-art-type-group-title {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+      color: var(--muted); font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+    }
+    .spx-art-type-count {
+      padding: 1px 6px; border-radius: 3px; border: 1px solid rgba(240, 240, 250, 0.2); font-size: 11px;
+    }
+    .spx-art-type-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px;
+    }
+    .spx-art-type {
+      display: flex; flex-direction: column; gap: 6px; padding: 8px;
+      border-radius: 4px; border: 1px solid rgba(240, 240, 250, 0.22);
+      background: rgba(240, 240, 250, 0.06); color: var(--spectral); font: inherit; text-align: left; cursor: pointer;
+    }
+    .spx-art-type:hover { background: rgba(240, 240, 250, 0.12); }
+    .spx-art-type.selected { border-color: rgba(245, 197, 66, 0.7); background: rgba(245, 197, 66, 0.12); }
+    .spx-art-type-thumb {
+      height: 56px; border-radius: 3px; background: #15151c;
+      border: 1px solid rgba(240, 240, 250, 0.12);
+    }
+    .spx-art-type-thumb.is-empty {
+      background:
+        linear-gradient(135deg, rgba(240,240,250,0.08), transparent 55%),
+        repeating-linear-gradient(45deg, #15151c 0 8px, #121218 8px 16px);
+    }
+    .spx-art-type-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .spx-art-type-code { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .spx-art-type-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .spx-art-status {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 12px;
+      border-top: 1px solid rgba(240, 240, 250, 0.14);
+      background: rgba(0, 0, 0, 0.45);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .spx-art-badge {
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: rgba(74, 83, 96, 0.85);
+      color: #f5f5f5;
+      font-size: 11px;
+      letter-spacing: 0.6px;
+    }
+
+    .spx-width {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+    }
+    .spx-width-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(240, 240, 250, 0.14);
+      color: var(--muted);
+      font-size: 13px;
+      background: rgba(0, 0, 0, 0.35);
+    }
+    .spx-width-stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: #0c0c10;
+    }
+    .spx-width-stage canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    .spx-width-float {
+      display: none;
+      position: absolute;
+      left: 50%;
+      top: 16px;
+      transform: translateX(-50%);
+      padding: 8px 18px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.78);
+      color: #fff;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      pointer-events: none;
+    }
+    .spx-width-float.show { display: block; }
+    .spx-width-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 10px 14px;
+      border-top: 1px solid rgba(240, 240, 250, 0.14);
+      background: rgba(0, 0, 0, 0.4);
+    }
+    .spx-width-metric {
+      display: flex;
+      flex-direction: column;
+      min-width: 88px;
+    }
+    .spx-width-metric .k { font-size: 11px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; }
+    .spx-width-metric .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .spx-width-metric.left .v { color: #ff4d4f; }
+    .spx-width-metric.right .v { color: #4c9aff; }
+    .spx-width-metric.muted .v { color: var(--muted); font-size: 18px; }
+    .spx-width-bar .spacer { flex: 1; }
+    .spx-width-bar .run-btn:disabled { opacity: 0.4; cursor: default; }
+    .spx-width-loading {
+      position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      color: #fff; background: rgba(0,0,0,0.4); white-space: pre-wrap; text-align: center; padding: 24px;
+      pointer-events: none;
+    }
+    .spx-width-loading.active { display: flex; }
+    .spx-width-manual {
+      display: none; align-items: center; gap: 8px; font-size: 13px; color: var(--muted);
+    }
+    .spx-width-manual.show { display: flex; }
+    .spx-width-manual input {
+      width: 110px; height: 36px; padding: 0 10px; border-radius: 4px;
+      border: 1px solid rgba(240,240,250,0.28); background: rgba(0,0,0,0.45);
+      color: var(--spectral); font-size: 18px; font-weight: 700;
+    }
+    .spx-width-pad-data {
+      font-family: Consolas, "Courier New", monospace; font-size: 12px; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 42%;
+    }
+    .spx-art-badge.active { background: #0f938f; }
+    .spx-art-badge.warn { background: #a3100d; }
+
+    /* ── DetectionRecords ── */
+    .spx-records {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      gap: 10px;
+      padding: 12px 14px 10px;
+    }
+    .spx-records-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+    .spx-records-tabs,
+    .spx-records-query {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .spx-records-query select,
+    .spx-records-query input[type="text"],
+    .spx-records-query input[type="date"],
+    .spx-records-pager input[type="number"] {
+      background: rgba(240, 240, 250, 0.06);
+      color: var(--spectral);
+      border: 1px solid rgba(240, 240, 250, 0.22);
+      border-radius: 4px;
+      padding: 6px 8px;
+      font: inherit;
+      min-height: 34px;
+      color-scheme: dark;
+    }
+    .spx-records-query select {
+      min-width: 128px;
+      max-width: 168px;
+      padding: 6px 28px 6px 10px;
+      appearance: none;
+      -webkit-appearance: none;
+      background-color: #141418;
+      background-image: linear-gradient(45deg, transparent 50%, var(--spectral) 50%),
+        linear-gradient(135deg, var(--spectral) 50%, transparent 50%);
+      background-position: calc(100% - 14px) 55%, calc(100% - 10px) 55%;
+      background-size: 4px 4px, 4px 4px;
+      background-repeat: no-repeat;
+      cursor: pointer;
+    }
+    .spx-records-query select:hover {
+      background-color: #1c1c22;
+      border-color: rgba(240, 240, 250, 0.38);
+    }
+    .spx-records-query select:focus {
+      outline: none;
+      border-color: rgba(240, 240, 250, 0.55);
+    }
+    .spx-records-query select option {
+      background: #141418;
+      color: #f0f0fa;
+    }
+    .spx-records-query select option:checked,
+    .spx-records-query select option:hover {
+      background: #2a2a34;
+      color: #f0f0fa;
+    }
+    .spx-records-query input[type="text"] { width: 140px; }
+    .spx-records-query input[type="date"] { width: 148px; }
+    .spx-records-table-wrap {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      border: 1px solid rgba(240, 240, 250, 0.14);
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.22);
+    }
+    .spx-records-table {
+      min-width: 1180px;
+      font-size: 12px;
+    }
+    .spx-records-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      white-space: nowrap;
+    }
+    .spx-records-table td {
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .spx-records-table tbody tr:nth-child(even) {
+      background: rgba(240, 240, 250, 0.03);
+    }
+    .spx-records-table tbody tr:hover {
+      background: rgba(240, 240, 250, 0.08);
+    }
+    .spx-rec-status {
+      display: inline-block;
+      min-width: 56px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      letter-spacing: 0.6px;
+      text-align: center;
+    }
+    .spx-rec-status.ok {
+      color: var(--ok);
+      border: 1px solid rgba(61, 220, 151, 0.45);
+      background: rgba(61, 220, 151, 0.12);
+    }
+    .spx-rec-status.warn {
+      color: var(--warn);
+      border: 1px solid rgba(245, 197, 66, 0.45);
+      background: rgba(245, 197, 66, 0.12);
+    }
+    .spx-records-pager {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      flex: 0 0 auto;
+      padding-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .spx-records-pager-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-right: auto;
+      white-space: nowrap;
+    }
+    .spx-records-pager-ctrl {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+    .spx-records-pager-ctrl .ghost-btn.compact {
+      padding: 4px 10px;
+      min-width: 0;
+      min-height: 28px;
+      border-radius: 4px;
+      letter-spacing: 0.4px;
+    }
+    .spx-records-pager input[type="number"] {
+      width: 48px;
+      min-height: 28px;
+      padding: 2px 4px;
+      text-align: center;
+    }
+    .spx-records-pager .ghost-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+    .spx-records-sep {
+      width: 1px;
+      height: 16px;
+      background: rgba(240, 240, 250, 0.2);
+      margin: 0 2px;
+      flex: 0 0 auto;
+    }
+    .spx-records-pager b { color: var(--spectral); }
+
+    @media (max-width: 1100px) {
+      .spx-aided-mainrow { grid-template-columns: 1fr; }
+      .spx-aided-side { flex-direction: row; flex-wrap: wrap; align-items: center; }
+      .spx-aided-confirm { min-height: 44px; width: auto; }
+      .spx-art { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 1fr) minmax(200px, 40%) auto; }
+      .spx-art-left { border-right: none; border-bottom: 1px solid rgba(240, 240, 250, 0.14); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">Bullmer</div>
+        <div class="mono" id="clock">2026-11-19  22:16:00</div>
+      </div>
+      <div class="header-center">
+        <button class="device-chip" type="button" data-popup="plc" title="x y ty">
+          <span class="dot ok" id="plcDot"></span>
+          <span class="label">PLC</span>
+          <span class="value" id="plcVal">120 12400 100000</span>
+        </button>
+        <button class="device-chip" type="button" data-popup="camera" title="frames">
+          <span class="dot ok" id="camDot"></span>
+          <span class="label">Camera</span>
+          <span class="value" id="camVal">1280</span>
+        </button>
+        <button class="device-chip" type="button" data-popup="light" title="auto / brightness">
+          <span class="dot ok" id="lightDot"></span>
+          <span class="label">Light</span>
+          <span class="value" id="lightVal">AUTO 180</span>
+        </button>
+        <button class="device-chip" type="button" data-popup="alarm">
+          <span class="dot ok" id="alarmDot"></span>
+          <span class="label">Alarm</span>
+          <span class="value" id="alarmVal">0</span>
+        </button>
+      </div>
+      <div class="header-right">
+        <select class="lang-select" id="lang" aria-label="Language">
+          <option value="zh-CN">中文</option>
+          <option value="en">English</option>
+          <option value="vi-VN">Tiếng Việt</option>
+          <option value="pt-PT">Português</option>
+          <option value="de-DE">Deutsch</option>
+        </select>
+        <button class="ghost-btn" type="button" data-popup="login">Login</button>
+        <button class="ghost-btn" type="button" data-popup="systemSettings">Settings</button>
+        <button class="ghost-btn" type="button" data-popup="about">About</button>
+        <button class="ghost-btn" type="button" id="btnExit">Exit</button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <div class="fabric" id="fabric"></div>
+      <div class="fabric-placeholder" id="fabricHint">Fabric Live View</div>
+      <div id="stageMarks"></div>
+
+      <aside class="hud-panel map">
+        <div class="label" id="mapTitle">Defect Map</div>
+        <div class="mono" id="mapMeta">1.50 × 42.0 m  ·  5</div>
+        <div class="map-canvas" id="mapCanvas"></div>
+      </aside>
+
+      <aside class="hud-panel list">
+        <div class="hud-head">
+          <span class="label" id="listTitle">Defect List</span>
+          <span class="mono" id="listMeta">5</span>
+        </div>
+        <div class="list-actions">
+          <button class="ghost-btn" type="button" id="btnDefectAdd" data-i18n="add_defect">新增</button>
+          <button class="ghost-btn" type="button" id="btnDefectEdit" data-i18n="edit_defect">编辑</button>
+        </div>
+        <ul class="defect-list" id="defectList"></ul>
+      </aside>
+
+      <div class="toast" id="toast"></div>
+
+      <!-- preview: RealTimeDetection::slot_show 基本信息弹窗 + 工具页 -->
+      <div class="demo-show" aria-label="slot_show demo">
+        <span class="demo-label">slot_show</span>
+        <button class="ghost-btn" type="button" data-popup="noclothstop">noclothstop</button>
+        <button class="ghost-btn" type="button" data-popup="empty_sheet_stop">empty_sheet</button>
+        <button class="ghost-btn" type="button" data-popup="noclothstop_clothfinish">clothfinish</button>
+        <button class="ghost-btn" type="button" data-popup="loop_stop">loop_stop</button>
+        <button class="ghost-btn" type="button" data-popup="cloth_finish_stop">cloth_finish</button>
+        <button class="ghost-btn" type="button" data-popup="mid_sample_stop">mid_sample</button>
+        <button class="ghost-btn" type="button" data-popup="width_sample_stop">width_sample</button>
+        <button class="ghost-btn" type="button" data-popup="netWidthNeedStart">net_start</button>
+        <button class="ghost-btn" type="button" data-popup="netWidthNeedStop">net_stop</button>
+        <button class="ghost-btn" type="button" data-popup="colordiffalarm">colordiff</button>
+        <span class="demo-label">tools</span>
+        <button class="ghost-btn" type="button" data-popup="defectAidedSelection">aided</button>
+        <button class="ghost-btn" type="button" data-popup="artificalAddDefect">add_defect</button>
+        <button class="ghost-btn" type="button" data-popup="artificalAddWidth">add_width</button>
+      </div>
+    </main>
+
+    <footer class="bottom">
+      <div class="side-col side-left">
+        <div class="side-grid">
+          <button class="chip" type="button" data-popup="erpEditSheet">
+            <span class="label" data-i18n="check_id">Check ID</span>
+            <span class="chip-value" id="checkId">CK-20261119</span>
+          </button>
+          <button class="chip" type="button" data-popup="erpEditSheet">
+            <span class="label" data-i18n="lot">Lot</span>
+            <span class="chip-value" id="lotNo">L-88421</span>
+          </button>
+          <button class="chip" type="button" data-popup="erpEditSheet">
+            <span class="label" data-i18n="roll">Roll</span>
+            <span class="chip-value" id="rollNo">R-17</span>
+          </button>
+          <button class="chip" type="button" data-popup="erpEditSheet">
+            <span class="label" data-i18n="color">Color</span>
+            <span class="chip-value" id="fabricColor">Navy</span>
+          </button>
+          <button class="chip" type="button" data-popup="erpEditSheet">
+            <span class="label" data-i18n="fabric_name">Fabric</span>
+            <span class="chip-value" id="fabricName">Twill 280GSM</span>
+          </button>
+          <button class="chip chip-fp" type="button" data-popup="fourPoints" title="百平方码扣分 / OK·NG">
+            <span class="label" data-i18n="fp_per100sq">百平方码扣分</span>
+            <span class="chip-value chip-fp-vals">
+              <b id="fpPer100Sq">0.00</b><span class="fp-sep">/</span><b id="fpResult" class="fp-ok">OK</b>
+            </span>
+          </button>
+          <button class="chip" type="button" data-popup="width">
+            <span class="label" data-i18n="gross_width">毛幅宽</span>
+            <span class="chip-value" id="grossWidth">150.0</span>
+          </button>
+          <button class="chip" type="button" data-popup="artificalAddWidth">
+            <span class="label" data-i18n="net_width">净幅宽</span>
+            <span class="chip-value" id="netWidthChip">148.2</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="center-col">
+        <div class="action-row">
+          <button class="ghost-btn act-new" type="button" data-popup="erpNewSheet" data-i18n="new_sheet">New</button>
+          <button class="run-btn" type="button" id="btnRun" data-i18n="start">Start</button>
+          <button class="ghost-btn act-finish" type="button" data-popup="finishSheet" data-i18n="finish_sheet">Finish</button>
+        </div>
+        <div class="meter-row">
+          <button class="meter" type="button" data-popup="length">
+            <span class="label" data-i18n="length">Length</span>
+            <span class="meter-value">
+              <span class="chip-value" id="meterLength">12.4</span>
+              <span class="meter-unit">m</span>
+            </span>
+          </button>
+          <button class="meter" type="button" data-popup="width">
+            <span class="label" data-i18n="width">Width</span>
+            <span class="meter-value">
+              <span class="chip-value" id="meterWidth">150.0</span>
+              <span class="meter-unit">cm</span>
+            </span>
+          </button>
+          <button class="meter" type="button" data-popup="speed">
+            <span class="label" data-i18n="speed">Speed</span>
+            <span class="meter-value">
+              <span class="chip-value" id="meterSpeed">42.0</span>
+              <span class="meter-unit">m/min</span>
+            </span>
+          </button>
+          <button class="meter" type="button" data-popup="colorDiff">
+            <span class="label" data-i18n="color_diff">ΔE</span>
+            <span class="meter-value">
+              <span class="chip-value" id="meterColorDiff">0.42</span>
+              <span class="meter-unit">ΔE</span>
+            </span>
+          </button>
+          <button class="meter" type="button" data-popup="weight">
+            <span class="label" data-i18n="weight">Weight</span>
+            <span class="meter-value">
+              <span class="chip-value" id="meterWeight">18.6</span>
+              <span class="meter-unit">kg</span>
+            </span>
+          </button>
+          <button class="meter" type="button" data-popup="tension">
+            <span class="label" data-i18n="tension">Tension</span>
+            <span class="meter-value">
+              <span class="chip-value" id="meterTension">32.0</span>
+              <span class="meter-unit">N</span>
+            </span>
+          </button>
+        </div>
+        <div class="progress-wrap" aria-label="progress">
+          <div class="progress-fill" id="progressFill"></div>
+          <div class="progress-text" id="progressText">12.4 / 100.0 m</div>
+        </div>
+      </div>
+
+      <div class="side-col side-right">
+        <div class="side-grid">
+          <button class="chip" type="button" data-popup="defectSettings">
+            <span class="label" data-i18n="defect_settings">Defect Settings</span>
+            <span class="chip-value" id="defectSettings">Twill 280GSM</span>
+          </button>
+          <button class="chip" type="button" data-popup="records">
+            <span class="label" data-i18n="records">Records</span>
+            <span class="chip-value" id="records">1260 m</span>
+          </button>
+          <button class="chip" type="button" data-popup="unwind">
+            <span class="label" data-i18n="unwind">Unwind</span>
+            <span class="chip-value" id="unwind">68%</span>
+          </button>
+          <button class="chip" type="button" data-popup="cpu">
+            <span class="label">CPU</span>
+            <span class="chip-value" id="cpu">41%</span>
+          </button>
+          <button class="chip" type="button" data-popup="gpu">
+            <span class="label">GPU</span>
+            <span class="chip-value" id="gpu">57%</span>
+          </button>
+          <button class="chip alarm-chip" type="button" data-popup="alarm" id="alarmChip" title="报警信息">
+            <span class="label" data-i18n="alarm">Alarm</span>
+            <span class="chip-value">
+              <span class="alarm-ticker-viewport">
+                <span class="alarm-ticker-track" id="alarmMsg">—</span>
+              </span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="./spacex-settings-catalog.js"></script>
+  <script src="./spacex-popups.js"></script>
+  <script>
+    const I18N = {
+      "zh-CN": {
+        check_id: "检验单", lot: "缸号", roll: "卷号", color: "颜色", fabric_name: "布料",
+        length: "码长", width: "幅宽", gross_width: "毛幅宽", net_width: "净幅宽",
+        speed: "速度", color_diff: "色差", weight: "重量",
+        new_sheet: "新建", start: "启动", pause: "暂停", resume: "继续", finish_sheet: "结束",
+        defect_settings: "疵点设置", records: "检验记录", tension: "张力", unwind: "放卷",
+        map: "疵点地图", list: "疵点列表", fabric_hint: "布料实时画面",
+        fp_per100sq: "百平方码扣分",
+        add_defect: "新增", edit_defect: "编辑",
+        login: "登录", settings: "设置", about: "关于", exit: "退出",
+        ok: "通", offline: "断"
+      },
+      en: {
+        check_id: "Check ID", lot: "Lot", roll: "Roll", color: "Color", fabric_name: "Fabric",
+        length: "Length", width: "Width", gross_width: "Gross W", net_width: "Net W",
+        speed: "Speed", color_diff: "ΔE", weight: "Weight",
+        new_sheet: "New", start: "Start", pause: "Pause", resume: "Resume", finish_sheet: "Finish",
+        defect_settings: "Defect Settings", records: "Records", tension: "Tension", unwind: "Unwind",
+        map: "Defect Map", list: "Defect List", fabric_hint: "Fabric Live View",
+        fp_per100sq: "/100 yd²",
+        add_defect: "Add", edit_defect: "Edit",
+        login: "Login", settings: "Settings", about: "About", exit: "Exit",
+        ok: "OK", offline: "OFF"
+      },
+      "vi-VN": {
+        check_id: "Phiếu", lot: "Lô", roll: "Cuộn", color: "Màu", fabric_name: "Vải",
+        length: "Dài", width: "Rộng", speed: "Tốc độ", color_diff: "ΔE", weight: "Khối lượng",
+        new_sheet: "Mới", start: "Chạy", pause: "Tạm dừng", resume: "Tiếp", finish_sheet: "Kết thúc",
+        defect_settings: "Cài lỗi", records: "Hồ sơ", tension: "Căng", unwind: "Xả",
+        map: "Bản đồ lỗi", list: "Danh sách lỗi", fabric_hint: "Hình vải trực tiếp",
+        fp_per100sq: "/100 yd²",
+        add_defect: "Thêm", edit_defect: "Sửa",
+        login: "Đăng nhập", settings: "Cài đặt", about: "Giới thiệu", exit: "Thoát",
+        ok: "OK", offline: "OFF"
+      },
+      "pt-PT": {
+        check_id: "Folha", lot: "Lote", roll: "Rolo", color: "Cor", fabric_name: "Tecido",
+        length: "Compr.", width: "Largura", speed: "Veloc.", color_diff: "ΔE", weight: "Peso",
+        new_sheet: "Novo", start: "Iniciar", pause: "Pausa", resume: "Retomar", finish_sheet: "Fim",
+        defect_settings: "Defeitos", records: "Registos", tension: "Tensão", unwind: "Desenrolar",
+        map: "Mapa", list: "Lista", fabric_hint: "Vista do tecido",
+        fp_per100sq: "/100 yd²",
+        add_defect: "Novo", edit_defect: "Editar",
+        login: "Entrar", settings: "Definições", about: "Sobre", exit: "Sair",
+        ok: "OK", offline: "OFF"
+      },
+      "de-DE": {
+        check_id: "Auftrag", lot: "Partie", roll: "Rolle", color: "Farbe", fabric_name: "Stoff",
+        length: "Länge", width: "Breite", speed: "Tempo", color_diff: "ΔE", weight: "Gewicht",
+        new_sheet: "Neu", start: "Start", pause: "Pause", resume: "Weiter", finish_sheet: "Ende",
+        defect_settings: "Fehler", records: "Protokolle", tension: "Zug", unwind: "Abwickeln",
+        map: "Fehlerkarte", list: "Fehlerliste", fabric_hint: "Stoff-Livebild",
+        fp_per100sq: "/100 yd²",
+        add_defect: "Neu", edit_defect: "Bearbeiten",
+        login: "Login", settings: "Einstellungen", about: "Info", exit: "Beenden",
+        ok: "OK", offline: "AUS"
+      }
+    };
+
+    const DEFECTS = [
+      { id: 1, title: "Knot", grade: "I", y: 8.2, x: 0.22 },
+      { id: 2, title: "Hole", grade: "II", y: 15.6, x: 0.61 },
+      { id: 3, title: "Stain", grade: "I", y: 21.4, x: 0.38 },
+      { id: 4, title: "Slub", grade: "III", y: 29.1, x: 0.74 },
+      { id: 5, title: "Broken", grade: "II", y: 36.8, x: 0.18 },
+      { id: 6, title: "Tear", grade: "IV", y: 41.2, x: 0.48 }
+    ];
+
+    const GRADE_POINTS = { I: 1, II: 2, III: 3, IV: 4 };
+
+    function calcFourPoints(defects, lengthM, widthCm) {
+      const counts = { I: 0, II: 0, III: 0, IV: 0 };
+      const rows = [];
+      let total = 0;
+      (defects || []).forEach((d) => {
+        const g = d.grade || "I";
+        const pts = GRADE_POINTS[g] || 0;
+        if (counts[g] != null) counts[g] += 1;
+        total += pts;
+        rows.push({ id: d.id, title: d.title, grade: g, points: pts, y: d.y });
+      });
+      const lengthYd = Math.max(0.01, lengthM * 1.0936133);
+      const widthYd = Math.max(0.01, (widthCm / 100) * 1.0936133);
+      const areaSqYd = lengthYd * widthYd;
+      const per100Sq = (total / areaSqYd) * 100;
+      const per100 = (total / lengthYd) * 100;
+      const threshold = 40;
+      return {
+        total,
+        per100Sq,
+        per100,
+        counts,
+        rows,
+        threshold,
+        isNg: per100Sq > threshold,
+      };
+    }
+
+    const HISTORY_MAX = 120;
+    const state = {
+      lang: "zh-CN",
+      running: true,
+      selectedId: 2,
+      lengthM: 12.4,
+      targetM: 100,
+      speed: 42,
+      widthCm: 150,
+      colorDiff: 0.42,
+      weightKg: 18.6,
+      weightGrossKg: 19.2,
+      weightNetKg: 18.6,
+      recentWeights: [
+        { roll: "R-16", gross: 19.8, net: 19.1, lengthM: 98.5 },
+        { roll: "R-15", gross: 18.9, net: 18.2, lengthM: 96.0 },
+        { roll: "R-14", gross: 20.1, net: 19.4, lengthM: 100.2 },
+        { roll: "R-13", gross: 17.6, net: 17.0, lengthM: 88.4 },
+        { roll: "R-12", gross: 19.3, net: 18.7, lengthM: 95.1 },
+        { roll: "R-11", gross: 18.4, net: 17.8, lengthM: 92.3 },
+        { roll: "R-10", gross: 19.0, net: 18.3, lengthM: 94.7 },
+        { roll: "R-09", gross: 20.4, net: 19.7, lengthM: 101.0 },
+        { roll: "R-08", gross: 18.1, net: 17.5, lengthM: 90.2 },
+        { roll: "R-07", gross: 19.5, net: 18.8, lengthM: 97.6 }
+      ],
+      tension: 32,
+      fabricTension: 30,
+      rollTension: 20,
+      swingAmplitude: 50,
+      unwind: 68,
+      cpu: 41,
+      gpu: 57,
+      todayM: 1260,
+      alarm: 0,
+      alarmMsg: "",
+      alarmList: [],
+      history: [],
+      /** PLCTest 状态（对齐 /api/v0/realtime/plc/status） */
+      plc: {
+        is_connected: true,
+        fabric_length: 12.4,
+        servo_speed: 42,
+        encoder: 12400,
+        servo_value: 0.42,
+        speed: 0.3,
+        fabric_tension_pid: 30,
+        roll_tension: 20,
+        tension: 30,
+        plc_fabric_width: 150,
+        width_sensor_left: 12,
+        width_sensor_right: 162,
+        live_weight: 18.6,
+        last_weight: 18.2,
+        current_x: 120,
+        current_y: 12400,
+        current_z: 80,
+        speed_set: 0.3,
+        fabric_tension_set: 30,
+        roll_tension_set: 20,
+        label_x: 100,
+        label_y: 100000,
+        tension_factor: 1,
+        roll_unreel_factor: 0.68,
+        differential_tension: 1,
+        differential_roll: 1,
+        labelling_descent_height: 50,
+        shaft_rotation_reverse: false,
+        plcalarm: "0000000000000000",
+        labelalarm: "0000000000000000",
+        motoralarm: "0000000000000000",
+      },
+      /** 顶栏设备 chip：PLC x/y/ty、相机帧数、光源自动调光+亮度 */
+      plcX: 120,
+      plcY: 12400,
+      plcTy: 100000,
+      camFrames: 1280,
+      lightAuto: true,
+      lightBrightness: 180,
+      /** 对齐 IsNoClothStopZeroAfterLast */
+      noClothStopZeroAfter: false,
+      /** 对齐 sharedata->isNoClothStop：0 无 / 1 无布 / 2 断布 */
+      isNoClothStop: 0,
+      /** 门幅采样点百分比（WidthSampleStop %3） */
+      widthSampleRatio: 50,
+      /** 对齐 IsEnableColourDifference */
+      enableColourDiff: true,
+      /** DefectAidedSelection 预览卡片 */
+      aidedDefects: null,
+      /** artifical_add_defect 预览 */
+      artificalRois: [],
+      artificalRoiId: null,
+      artificalMode: "rect",
+      artificalRoiSeq: 1,
+      artificalImgType: 0,
+      artificalLabelModal: false,
+      artificalLabelFilter: "",
+      artificalConfirm: null,
+      artificalConfirmId: null,
+      /** artifical_edit_defect 预览 */
+      editSelectedId: null,
+      editConfirm: null,
+      /** artifical_add_width 预览 */
+      netWidth: { last: 148.2 },
+      /** DetectionRecords 预览状态 */
+      recordsUi: {
+        filter: 0,
+        queryType: 0,
+        queryValue: "",
+        queryDate: "2026-11-19",
+        queryDate2: "2026-11-20",
+        page: 1,
+        totalLengthM: 1260,
+      },
+    };
+
+    function ensureAidedDefects() {
+      if (Array.isArray(state.aidedDefects) && state.aidedDefects.length) return state.aidedDefects;
+      const zh = state.lang === "zh-CN";
+      state.aidedDefects = [
+        { id: 1, title: zh ? "断经" : "Broken warp", x: 182, y: 1240, recommend: true, selected: true, grade: "II" },
+        { id: 2, title: zh ? "油污" : "Oil stain", x: 640, y: 1180, recommend: true, selected: true, grade: "I" },
+        { id: 3, title: zh ? "破洞" : "Hole", x: 910, y: 1310, recommend: false, selected: false, grade: "III" },
+        { id: 4, title: zh ? "纬斜" : "Skew", x: 420, y: 1260, recommend: true, selected: true, grade: "II" },
+        { id: 5, title: zh ? "色斑" : "Color spot", x: 1050, y: 1205, recommend: false, selected: false, grade: "I" },
+        { id: 6, title: zh ? "粗节" : "Slub", x: 260, y: 1340, recommend: true, selected: true, grade: "II" },
+      ];
+      return state.aidedDefects;
+    }
+
+    function refreshOpenTool(host, key) {
+      if (!host || !host.isOpen(key)) return;
+      // 标注工具在 NO_LIVE_REFRESH 内：必须 rebuild，不能走定时 refresh
+      if (typeof host.rebuild === "function") host.rebuild();
+      else {
+        host.refresh([key]);
+        if (typeof host._initTool === "function") {
+          requestAnimationFrame(() => host._initTool(key));
+        }
+      }
+    }
+
+    function pushHistorySample(force) {
+      const now = Date.now() / 1000;
+      const last = state.history[state.history.length - 1];
+      if (!force && last && now - last.t < 0.35) return;
+      state.history.push({
+        t: now,
+        lengthM: state.lengthM,
+        widthCm: state.widthCm,
+        speed: state.speed,
+        colorDiff: state.colorDiff,
+        tension: state.tension,
+        weightKg: state.weightKg
+      });
+      if (state.history.length > HISTORY_MAX) {
+        state.history.splice(0, state.history.length - HISTORY_MAX);
+      }
+    }
+
+    // 预填一段演示序列，打开弹窗即可看到曲线
+    (function seedHistory() {
+      const t0 = Date.now() / 1000 - 40;
+      for (let i = 0; i < 40; i++) {
+        const u = i / 39;
+        state.history.push({
+          t: t0 + i,
+          lengthM: 8 + u * 4.5 + Math.sin(i / 3) * 0.15,
+          widthCm: 149.2 + Math.sin(i / 5) * 1.2,
+          speed: 40 + Math.sin(i / 4) * 3.5,
+          colorDiff: 0.35 + Math.abs(Math.sin(i / 6)) * 0.2,
+          tension: 30 + Math.sin(i / 3.5) * 4,
+          weightKg: 18.2 + u * 0.4
+        });
+      }
+      const last = state.history[state.history.length - 1];
+      state.lengthM = last.lengthM;
+      state.widthCm = last.widthCm;
+      state.speed = last.speed;
+      state.colorDiff = last.colorDiff;
+      state.tension = last.tension;
+    })();
+
+    const $ = (id) => document.getElementById(id);
+
+    function t(key) {
+      return (I18N[state.lang] && I18N[state.lang][key]) || I18N.en[key] || key;
+    }
+
+    function showToast(msg) {
+      const el = $("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => el.classList.remove("show"), 1200);
+    }
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+
+    function tickClock() {
+      const d = new Date();
+      $("clock").textContent =
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}  ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function applyI18n() {
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        el.textContent = t(el.getAttribute("data-i18n"));
+      });
+      $("mapTitle").textContent = t("map");
+      $("listTitle").textContent = t("list");
+      $("fabricHint").textContent = t("fabric_hint");
+      document.querySelectorAll(".header-right .ghost-btn")[0].textContent = t("login");
+      document.querySelectorAll(".header-right .ghost-btn")[1].textContent = t("settings");
+      document.querySelectorAll(".header-right .ghost-btn")[2].textContent = t("about");
+      $("btnExit").textContent = t("exit");
+      updateDeviceChips();
+      updateRunBtn();
+      renderDefects();
+    }
+
+    function updateDeviceChips() {
+      const plc = `${Math.round(state.plcX)} ${Math.round(state.plcY)} ${Math.round(state.plcTy)}`;
+      const cam = String(Math.round(state.camFrames));
+      const light = `${state.lightAuto ? "AUTO" : "MAN"} ${Math.round(state.lightBrightness)}`;
+      $("plcVal").textContent = plc;
+      $("plcVal").title = `x y ty · ${plc}`;
+      $("camVal").textContent = cam;
+      $("camVal").title = (state.lang === "zh-CN" ? "采集帧数 · " : "Frames · ") + cam;
+      $("lightVal").textContent = light;
+      $("lightVal").title = (state.lang === "zh-CN"
+        ? (state.lightAuto ? "自动调光 · 亮度 " : "手动 · 亮度 ")
+        : (state.lightAuto ? "Auto light · " : "Manual · ")) + Math.round(state.lightBrightness);
+    }
+
+    function updateRunBtn() {
+      const btn = $("btnRun");
+      btn.classList.toggle("running", state.running);
+      btn.textContent = state.running ? t("pause") : t("start");
+      $("fabric").classList.toggle("paused", !state.running);
+    }
+
+    function openDefectDetail() {
+      if (!popupHost) return;
+      const listPanel = document.querySelector(".hud-panel.list");
+      if (popupHost.isOpen("defectDetail")) {
+        popupHost.refresh(["defectDetail"]);
+        if (typeof popupHost._place === "function") {
+          popupHost._place("left", listPanel);
+        }
+      } else {
+        popupHost.open("defectDetail", listPanel);
+      }
+    }
+
+    function renderDefects() {
+      $("listMeta").textContent = String(DEFECTS.length);
+      $("mapMeta").textContent =
+        `${(state.widthCm / 100).toFixed(2)} × ${state.lengthM.toFixed(1)} m  ·  ${DEFECTS.length}`;
+
+      const list = $("defectList");
+      list.innerHTML = "";
+      DEFECTS.forEach((d) => {
+        const li = document.createElement("li");
+        li.className = d.id === state.selectedId ? "active" : "";
+        li.textContent = `${d.title}  ·  ${d.grade}  ·  Y ${d.y.toFixed(1)} m`;
+        li.addEventListener("click", () => {
+          state.selectedId = d.id;
+          renderDefects();
+          openDefectDetail();
+        });
+        list.appendChild(li);
+      });
+
+      const map = $("mapCanvas");
+      map.innerHTML = "";
+      DEFECTS.forEach((d) => {
+        const p = document.createElement("div");
+        p.className = "map-point" + (d.id === state.selectedId ? " selected" : "");
+        p.style.left = `${d.x * 100}%`;
+        p.style.top = `${(d.y / Math.max(state.lengthM, 40)) * 100}%`;
+        p.title = d.title;
+        p.addEventListener("click", () => {
+          state.selectedId = d.id;
+          renderDefects();
+          openDefectDetail();
+        });
+        map.appendChild(p);
+      });
+
+      const marks = $("stageMarks");
+      marks.innerHTML = "";
+      DEFECTS.forEach((d) => {
+        const m = document.createElement("div");
+        m.className = "defect-mark" + (d.id === state.selectedId ? " selected" : "");
+        m.style.left = `${18 + d.x * 64}%`;
+        m.style.top = `${22 + (d.y / 40) * 56}%`;
+        marks.appendChild(m);
+      });
+
+      if (popupHost && popupHost.isOpen("defectDetail")) {
+        popupHost.refresh(["defectDetail"]);
+      }
+    }
+
+    function renderMetrics() {
+      $("meterLength").textContent = state.lengthM.toFixed(1);
+      $("meterWidth").textContent = state.widthCm.toFixed(1);
+      const grossEl = $("grossWidth");
+      if (grossEl) grossEl.textContent = state.widthCm.toFixed(1);
+      const netChip = $("netWidthChip");
+      if (netChip) {
+        const last = state.netWidth && state.netWidth.last != null ? Number(state.netWidth.last) : 0;
+        netChip.textContent = last > 0 ? last.toFixed(1) : "-";
+      }
+      $("meterSpeed").textContent = state.speed.toFixed(1);
+      $("meterColorDiff").textContent = state.colorDiff.toFixed(2);
+      $("meterWeight").textContent = state.weightNetKg.toFixed(1);
+      $("meterTension").textContent = state.tension.toFixed(1);
+      $("unwind").textContent = `${state.unwind.toFixed(0)}%`;
+      $("cpu").textContent = `${state.cpu.toFixed(0)}%`;
+      $("gpu").textContent = `${state.gpu.toFixed(0)}%`;
+      $("records").textContent = `${state.todayM.toFixed(0)} m`;
+      $("alarmVal").textContent = String(state.alarm);
+      $("alarmDot").className = "dot " + (state.alarm > 0 ? "bad" : "ok");
+      const alarmChip = $("alarmChip");
+      const alarmMsg = $("alarmMsg");
+      const idleMsg = state.lang === "zh-CN" ? "当前无报警" : "No alarms";
+      const liveMsg =
+        state.alarmMsg ||
+        (state.alarmList.length ? state.alarmList.map((a) => a.msg).join(" · ") : idleMsg);
+      alarmMsg.textContent = liveMsg;
+      alarmChip.classList.toggle("active", state.alarm > 0);
+      alarmChip.title = liveMsg;
+
+      const pct = Math.min(100, (state.lengthM / state.targetM) * 100);
+      $("progressFill").style.width = `${pct}%`;
+      $("progressText").textContent =
+        `${state.lengthM.toFixed(1)} / ${state.targetM.toFixed(1)} m`;
+      const fp = calcFourPoints(DEFECTS, state.lengthM, state.widthCm);
+      const fpPer = $("fpPer100Sq");
+      const fpResult = $("fpResult");
+      if (fpPer) fpPer.textContent = fp.per100Sq.toFixed(2);
+      if (fpResult) {
+        fpResult.textContent = fp.isNg ? "NG" : "OK";
+        fpResult.classList.toggle("fp-ok", !fp.isNg);
+        fpResult.classList.toggle("fp-ng", !!fp.isNg);
+      }
+      updateDeviceChips();
+    }
+
+    function demoTick() {
+      if (!state.running) return;
+      state.lengthM = Math.min(state.targetM, state.lengthM + state.speed / 3600 * 8);
+      state.speed = 40 + Math.sin(Date.now() / 1800) * 4;
+      state.widthCm = 150 + Math.sin(Date.now() / 2600) * 1.4;
+      state.colorDiff = 0.35 + Math.abs(Math.sin(Date.now() / 2200)) * 0.25;
+      state.tension = 30 + Math.sin(Date.now() / 1900) * 4;
+      state.plcX = 100 + Math.round((Date.now() / 200) % 40);
+      state.plcY = Math.round(state.lengthM * 1000);
+      state.plcTy = Math.round(state.targetM * 1000);
+      state.camFrames += 2;
+      state.lightBrightness = 160 + Math.round(Math.abs(Math.sin(Date.now() / 2400)) * 20);
+      // 演示：净重随码长缓慢变化，毛重保持净重+纸管
+      state.weightNetKg = 18 + state.lengthM * 0.05;
+      state.weightGrossKg = state.weightNetKg + 0.6;
+      state.weightKg = state.weightNetKg;
+      state.cpu = 35 + Math.abs(Math.sin(Date.now() / 1400)) * 25;
+      state.gpu = 45 + Math.abs(Math.cos(Date.now() / 1600)) * 30;
+      state.unwind = Math.max(20, 70 - state.lengthM * 0.2);
+      if (state.plc) {
+        state.plc.fabric_length = state.lengthM;
+        state.plc.servo_speed = state.speed;
+        state.plc.current_y = state.plcY;
+        state.plc.current_x = state.plcX;
+        state.plc.fabric_tension_pid = state.tension;
+        state.plc.roll_tension = state.rollTension;
+        state.plc.plc_fabric_width = state.widthCm;
+        state.plc.live_weight = state.weightKg;
+      }
+      // 演示：周期切换报警信息，驱动顶栏计数与底栏滚动文案
+      const demos =
+        state.lang === "zh-CN"
+          ? [
+              { code: "V16_0", msg: "验布站主动轴报警" },
+              { code: "V16_1", msg: "验布站张力轴报警" },
+              { code: "V17_7", msg: "称重位置物料没清空" },
+              { code: "DISK", msg: "磁盘空间不足" },
+            ]
+          : [
+              { code: "V16_0", msg: "Main drive alarm" },
+              { code: "V16_1", msg: "Tension axis alarm" },
+              { code: "V17_7", msg: "Weighing station not clear" },
+              { code: "DISK", msg: "Low disk space" },
+            ];
+      const phase = Math.floor(Date.now() / 6500) % (demos.length + 2);
+      if (phase < demos.length) {
+        const cur = demos[phase];
+        const next = demos[(phase + 1) % demos.length];
+        state.alarm = phase % 2 === 0 ? 1 : 2;
+        state.alarmList = phase % 2 === 0 ? [cur] : [cur, next];
+        state.alarmMsg = state.alarmList.map((a) => `[${a.code}] ${a.msg}`).join(" · ");
+      } else {
+        state.alarm = 0;
+        state.alarmList = [];
+        state.alarmMsg = "";
+      }
+      pushHistorySample();
+      renderMetrics();
+      $("mapMeta").textContent =
+        `${(state.widthCm / 100).toFixed(2)} × ${state.lengthM.toFixed(1)} m  ·  ${DEFECTS.length}`;
+      if (popupHost && typeof popupHost.refresh === "function") {
+        popupHost.refresh(["length", "width", "speed", "colorDiff", "tension", "alarm", "cpu", "gpu", "unwind"]);
+      }
+    }
+
+    const sheet = {
+      checkId: "CK-20261119",
+      lotNo: "L-88421",
+      rollNo: "R-17",
+      color: "Navy",
+      fabric: "Twill 280GSM",
+      barcode: "BM202611190017",
+      widthFront: 150.0,
+      widthMid: 150.0,
+      widthRear: 149.8,
+      deFront: 0.40,
+      deMid: 0.42,
+      deRear: 0.45,
+    };
+
+    function readSheetFormInto(target, { resetLength }) {
+      const id = document.getElementById("popCheckId");
+      const lot = document.getElementById("popLot");
+      const roll = document.getElementById("popRoll");
+      const color = document.getElementById("popColor");
+      const fabric = document.getElementById("popFabric");
+      const targetLen = document.getElementById("popTarget");
+      const barcode = document.getElementById("popBarcode");
+      const wF = document.getElementById("popWidthFront");
+      const wM = document.getElementById("popWidthMid");
+      const wR = document.getElementById("popWidthRear");
+      const dF = document.getElementById("popDeFront");
+      const dM = document.getElementById("popDeMid");
+      const dR = document.getElementById("popDeRear");
+      if (id) target.checkId = id.value;
+      if (lot) target.lotNo = lot.value;
+      if (roll) target.rollNo = roll.value;
+      if (color) target.color = color.value;
+      if (fabric) target.fabric = fabric.value;
+      if (barcode) target.barcode = barcode.value;
+      if (targetLen) state.targetM = Number(targetLen.value) || state.targetM;
+      if (wF) target.widthFront = Number(wF.value) || 0;
+      if (wM) target.widthMid = Number(wM.value) || 0;
+      if (wR) target.widthRear = Number(wR.value) || 0;
+      if (dF) target.deFront = Number(dF.value) || 0;
+      if (dM) target.deMid = Number(dM.value) || 0;
+      if (dR) target.deRear = Number(dR.value) || 0;
+      // 中幅宽 / 中色差同步到底栏实时显示
+      if (wM) state.widthCm = target.widthMid;
+      if (dM) state.colorDiff = target.deMid;
+      $("checkId").textContent = target.checkId;
+      $("lotNo").textContent = target.lotNo;
+      $("rollNo").textContent = target.rollNo;
+      $("fabricColor").textContent = target.color;
+      $("fabricName").textContent = target.fabric;
+      $("defectSettings").textContent = target.fabric;
+      if (resetLength) state.lengthM = 0;
+      renderMetrics();
+    }
+
+    const popupHost = new SpxPopupHost({
+      getCtx: () => ({
+        lang: state.lang,
+        settingsValues: state.settingsValues || {},
+        settingsLoaded: !!state.settingsLoaded,
+        state,
+        sheet,
+        defects: DEFECTS,
+        aidedDefects: ensureAidedDefects(),
+        fourPoints: calcFourPoints(DEFECTS, state.lengthM, state.widthCm),
+        history: state.history,
+        // 预览默认展示管理员 About（与 CustomUI About 对齐）
+        about: {
+          version: "1.26.1119.232927",
+          buildTime: "2026-11-19 23:29:27",
+          gitInfo: "v2-stable_60de8481",
+          machineProject: 0,
+          machineSerial: "BM-FS-2026-001",
+          erpFactory: "default",
+          installDate: "2026-11-01",
+          testMode: 0,
+          isAdmin: true,
+        },
+      }),
+      onAction: async (act, key, host) => {
+        const actEl = host && host._actEl;
+        const actId = actEl ? Number(actEl.getAttribute("data-id")) : NaN;
+        if (act === "login-ok") {
+          const user = document.getElementById("popLoginUser");
+          const name = user ? user.value : "OPERATOR";
+          document.querySelectorAll(".header-right .ghost-btn")[0].textContent = name;
+          showToast(t("login") + " · " + name);
+          host.close();
+          return;
+        }
+        if (String(act || "").startsWith("about-")) {
+          showToast((state.lang === "zh-CN" ? "关于 · " : "About · ") + act.replace("about-", ""));
+          return;
+        }
+        if (act === "plc-live" || act === "plc-apply") {
+          const spd = document.getElementById("popPlcSpeed");
+          const fabric = document.getElementById("popPlcFabric");
+          const roll = document.getElementById("popPlcRoll");
+          const swing = document.getElementById("popPlcSwing");
+          if (spd) state.speed = Number(spd.value) * 60;
+          if (fabric) {
+            state.fabricTension = Number(fabric.value);
+            state.tension = state.fabricTension;
+          }
+          if (roll) state.rollTension = Number(roll.value);
+          if (swing) state.swingAmplitude = Number(swing.value);
+          renderMetrics();
+          const msg = document.getElementById("popPlcMsg");
+          if (msg) {
+            msg.textContent = state.lang === "zh-CN"
+              ? `已更新 · 速度 ${(state.speed / 60).toFixed(1)} m/s · 验布 ${state.fabricTension} N · 收卷 ${state.rollTension} N · 摆布 ${state.swingAmplitude}`
+              : `Updated · ${(state.speed / 60).toFixed(1)} m/s`;
+            msg.className = "spx-plc-msg ok";
+          }
+          if (act === "plc-apply") {
+            showToast("PLC");
+            host.close();
+          }
+          return;
+        }
+        if (act === "plct-cmd" || act === "plct-toggle" || act === "plct-hold-down" || act === "plct-hold-up" || act === "plct-apply" || act === "plct-movex") {
+          const el = host && host._actEl;
+          const msg = document.getElementById("popPlcTestMsg");
+          let tip = act;
+          if (act === "plct-cmd" && el) tip = el.getAttribute("data-cmd") || act;
+          else if (act === "plct-toggle" && el) tip = el.checked ? (el.getAttribute("data-on") || act) : (el.getAttribute("data-off") || act);
+          else if (act === "plct-apply") tip = state.lang === "zh-CN" ? "参数已写入" : "Param written";
+          else if (act === "plct-movex") tip = state.lang === "zh-CN" ? "移动 X" : "Move X";
+          if (msg) {
+            msg.textContent = tip;
+            msg.className = "spx-plct-msg ok";
+          }
+          showToast("PLC · " + tip);
+          return;
+        }
+        if (act === "settings-save") {
+          const payload =
+            typeof spxCollectSettingsPayload === "function" ? spxCollectSettingsPayload() : {};
+          state.settingsValues = Object.assign({}, state.settingsValues || {}, payload);
+          state.settingsLoaded = true;
+          if (payload.CurrentLanguage) {
+            state.lang = payload.CurrentLanguage;
+            const langEl = $("lang");
+            if (langEl) langEl.value = state.lang;
+            applyI18n();
+          }
+          showToast(t("settings"));
+          host.close();
+          return;
+        }
+        if (act === "sheet-create") {
+          readSheetFormInto(sheet, { resetLength: true });
+          showToast(t("new_sheet"));
+          host.close();
+          return;
+        }
+        if (act === "sheet-save") {
+          readSheetFormInto(sheet, { resetLength: false });
+          showToast(state.lang === "zh-CN" ? "已保存" : "Saved");
+          host.close();
+          return;
+        }
+        if (act === "weight-save") {
+          const g = document.getElementById("popWeightGross");
+          const n = document.getElementById("popWeightNet");
+          if (g) state.weightGrossKg = Math.max(0, Number(g.value) || 0);
+          if (n) state.weightNetKg = Math.max(0, Number(n.value) || 0);
+          state.weightKg = state.weightNetKg;
+          // 写入最近卷列表头部（本卷）
+          state.recentWeights.unshift({
+            roll: sheet.rollNo || "R-?",
+            gross: state.weightGrossKg,
+            net: state.weightNetKg,
+            lengthM: state.lengthM
+          });
+          if (state.recentWeights.length > 10) state.recentWeights.length = 10;
+          renderMetrics();
+          showToast(state.lang === "zh-CN" ? "重量已保存" : "Weight saved");
+          host.close();
+          return;
+        }
+        if (act === "bc-clear") {
+          const bc = document.getElementById("popBarcode");
+          if (bc) bc.value = "";
+          return;
+        }
+        if (act === "finish-yes") {
+          state.running = false;
+          updateRunBtn();
+          showToast(t("finish_sheet"));
+          host.close();
+          return;
+        }
+        // slot_show("noclothstop") — Yes=无布 / No=断布 / Cancel 已在 host 关闭
+        if (act === "nocloth-yes") {
+          const zeroEl = document.getElementById("popNoClothZero");
+          state.noClothStopZeroAfter = !!(zeroEl && zeroEl.checked);
+          state.isNoClothStop = 1;
+          state.running = false;
+          updateRunBtn();
+          showToast(
+            state.lang === "zh-CN"
+              ? `无布停机${state.noClothStopZeroAfter ? " · 回零" : ""}`
+              : `No cloth stop${state.noClothStopZeroAfter ? " · zero" : ""}`
+          );
+          host.close();
+          return;
+        }
+        if (act === "nocloth-no") {
+          state.isNoClothStop = 2;
+          state.noClothStopZeroAfter = false;
+          state.running = false;
+          updateRunBtn();
+          showToast(state.lang === "zh-CN" ? "断布 · 继续检验" : "Broken web · continue");
+          host.close();
+          return;
+        }
+        // slot_show("empty_sheet_stop")
+        if (act === "empty-sheet-yes") {
+          state.running = false;
+          updateRunBtn();
+          showToast(state.lang === "zh-CN" ? "空单完成 · 停止检验" : "Empty sheet finished");
+          host.close();
+          return;
+        }
+        // slot_show("noclothstop_clothfinish")
+        if (act === "clothfinish-yes") {
+          state.running = false;
+          state.isNoClothStop = 0;
+          updateRunBtn();
+          showToast(state.lang === "zh-CN" ? "验布完成 · 停止检验单" : "Inspection finished · stop sheet");
+          host.close();
+          return;
+        }
+        if (act === "clothfinish-no") {
+          state.isNoClothStop = 0;
+          showToast(state.lang === "zh-CN" ? "未完成 · 继续检验" : "Not finished · continue");
+          host.close();
+          return;
+        }
+        // slot_show("loop_stop") — Yes 暂停 / No 继续
+        if (act === "loop-yes") {
+          state.running = false;
+          updateRunBtn();
+          showToast(state.lang === "zh-CN" ? "循环停机 · 已暂停" : "Loop stop · paused");
+          host.close();
+          return;
+        }
+        if (act === "loop-no") {
+          state.running = true;
+          updateRunBtn();
+          showToast(state.lang === "zh-CN" ? "循环停机 · 继续" : "Loop stop · continue");
+          host.close();
+          return;
+        }
+        // slot_show("cloth_finish_stop")
+        if (act === "cloth-finish-ok") {
+          state.running = false;
+          updateRunBtn();
+          showToast(state.lang === "zh-CN" ? "布尾到位停机" : "Fabric end stop");
+          host.close();
+          return;
+        }
+        // slot_show("mid_sample_stop") / width_sample_stop：确定后由操作员再启动
+        if (act === "mid-sample-ok" || act === "width-sample-ok") {
+          state.running = false;
+          updateRunBtn();
+          showToast(
+            act === "mid-sample-ok"
+              ? (state.lang === "zh-CN" ? "中段取样 · 待启动" : "Mid sample · await start")
+              : (state.lang === "zh-CN" ? "门幅采样 · 待启动" : "Width sample · await start")
+          );
+          host.close();
+          return;
+        }
+        // slot_show("colordiffalarm")
+        if (act === "colordiff-ok") {
+          if (state.enableColourDiff) {
+            state.running = false;
+            state.alarm = Math.max(1, state.alarm);
+            updateRunBtn();
+            renderMetrics();
+            showToast(state.lang === "zh-CN" ? "色差报警已确认" : "Color diff acknowledged");
+          } else {
+            showToast(state.lang === "zh-CN" ? "色差未开启" : "Color diff disabled");
+          }
+          host.close();
+          return;
+        }
+        if (act === "alarm-clear") {
+          state.alarm = 0;
+          state.alarmList = [];
+          state.alarmMsg = "";
+          renderMetrics();
+          showToast("ALARM 0");
+          host.close();
+          return;
+        }
+        if (act === "defect-detail-edit") {
+          state.editSelectedId = state.selectedId;
+          state.editConfirm = null;
+          host.open("artificalEditDefect");
+          return;
+        }
+        if (act === "defect-add-save") {
+          const titleEl = document.getElementById("popDefTitle");
+          const gradeEl = document.getElementById("popDefGrade");
+          const yEl = document.getElementById("popDefY");
+          const xEl = document.getElementById("popDefX");
+          const nextId = DEFECTS.reduce((m, d) => Math.max(m, d.id), 0) + 1;
+          const row = {
+            id: nextId,
+            title: (titleEl && titleEl.value.trim()) || "Manual",
+            grade: (gradeEl && gradeEl.value) || "I",
+            y: Math.max(0, Number(yEl && yEl.value) || state.lengthM),
+            x: Math.min(1, Math.max(0, Number(xEl && xEl.value) || 0.5)),
+          };
+          DEFECTS.push(row);
+          state.selectedId = row.id;
+          renderDefects();
+          renderMetrics();
+          showToast(t("add_defect"));
+          host.close();
+          openDefectDetail();
+          return;
+        }
+        if (act === "defect-edit-save") {
+          const d = DEFECTS.find((x) => x.id === state.selectedId);
+          if (!d) {
+            showToast(state.lang === "zh-CN" ? "未选择疵点" : "No defect selected");
+            return;
+          }
+          const titleEl = document.getElementById("popDefTitle");
+          const gradeEl = document.getElementById("popDefGrade");
+          const yEl = document.getElementById("popDefY");
+          const xEl = document.getElementById("popDefX");
+          if (titleEl) d.title = titleEl.value.trim() || d.title;
+          if (gradeEl) d.grade = gradeEl.value || d.grade;
+          if (yEl) d.y = Math.max(0, Number(yEl.value) || d.y);
+          if (xEl) d.x = Math.min(1, Math.max(0, Number(xEl.value) || d.x));
+          renderDefects();
+          renderMetrics();
+          showToast(t("edit_defect"));
+          host.close();
+          openDefectDetail();
+          return;
+        }
+        if (act === "light-preset" || act === "light-live") {
+          const el = host._actEl;
+          if (act === "light-preset" && el) {
+            const color = el.getAttribute("data-color") || "";
+            const v1 = Number(el.getAttribute("data-v")) || 0;
+            const v2 = el.getAttribute("data-v2") != null ? Number(el.getAttribute("data-v2")) : v1;
+            state.selectedColor = color;
+            state.lightBrightness = v1;
+            if (Array.isArray(state.lights)) {
+              state.lights.forEach((L) => {
+                L.v = Number(L.id) === 2 ? v2 : v1;
+              });
+            }
+            showToast((state.lang || "zh-CN").startsWith("zh") ? "已按布色设置亮度" : "Brightness set by color");
+          }
+          return;
+        }
+        if (act === "cam-refresh" || act === "cam-auto" || act === "cam-save" ||
+            act === "light-apply" || act === "defect-save" || act === "defect-refresh" ||
+            act === "bc-scan") {
+          showToast(act.toUpperCase());
+          if (act === "cam-save" || act === "light-apply" || act === "defect-save") host.close();
+          return;
+        }
+
+        // ── DefectAidedSelection ──
+        if (act === "aided-select" || act === "aided-ignore") {
+          const list = ensureAidedDefects();
+          const card = list.find((c) => c.id === actId);
+          if (card) card.selected = act === "aided-select";
+          refreshOpenTool(host, "defectAidedSelection");
+          return;
+        }
+        if (act === "aided-select-all") {
+          ensureAidedDefects().forEach((c) => { c.selected = true; });
+          refreshOpenTool(host, "defectAidedSelection");
+          return;
+        }
+        if (act === "aided-ignore-all") {
+          ensureAidedDefects().forEach((c) => { c.selected = false; });
+          refreshOpenTool(host, "defectAidedSelection");
+          return;
+        }
+        if (act === "aided-ignore-other") {
+          ensureAidedDefects().forEach((c) => {
+            if (!c.recommend) c.selected = false;
+          });
+          refreshOpenTool(host, "defectAidedSelection");
+          return;
+        }
+        if (act === "aided-confirm") {
+          const n = ensureAidedDefects().filter((c) => c.selected).length;
+          showToast(state.lang === "zh-CN" ? `已确认贴标 · ${n} 个` : `Confirmed · ${n}`);
+          host.close();
+          return;
+        }
+        if (act === "aided-prev" || act === "aided-next" || act === "aided-type") {
+          showToast(state.lang === "zh-CN" ? "预览：单页演示" : "Preview: single page");
+          return;
+        }
+
+        // ── artifical_add_defect ──
+        if (act === "art-mode") {
+          const mode = actEl && actEl.getAttribute("data-mode");
+          if (mode) state.artificalMode = mode;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-imgtype") {
+          const t = actEl && Number(actEl.getAttribute("data-imgtype"));
+          if (Number.isFinite(t)) state.artificalImgType = t;
+          refreshOpenTool(host, "artificalAddDefect");
+          showToast(state.lang === "zh-CN" ? `图像${state.artificalImgType + 1}` : `Image ${state.artificalImgType + 1}`);
+          return;
+        }
+        if (act === "art-roi-add") {
+          const p = host._pendingRoi;
+          host._pendingRoi = null;
+          if (!p) return;
+          const id = state.artificalRoiSeq++;
+          state.artificalRois.push({
+            id, x: p.x, y: p.y, w: p.w, h: p.h, label: "",
+          });
+          state.artificalRoiId = id;
+          state.artificalLabelModal = true;
+          refreshOpenTool(host, "artificalAddDefect");
+          showToast(state.lang === "zh-CN" ? `ROI-${id} 已添加` : `ROI-${id} added`);
+          return;
+        }
+        if (act === "art-roi-select") {
+          const rid = actEl && Number(actEl.getAttribute("data-roi-id"));
+          if (Number.isFinite(rid)) state.artificalRoiId = rid;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-roi-del") {
+          state.artificalConfirm = "delete";
+          state.artificalConfirmId = actId;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-ticket") {
+          state.artificalConfirm = "ticket";
+          state.artificalConfirmId = actId;
+          state.artificalRoiId = actId;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-label-open") {
+          if (state.artificalRoiId == null) {
+            showToast(state.lang === "zh-CN" ? "请先选择 ROI" : "Select a ROI first");
+            return;
+          }
+          state.artificalLabelModal = true;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-label-close") {
+          state.artificalLabelModal = false;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-label-filter") {
+          state.artificalLabelFilter = (actEl && actEl.getAttribute("data-group")) || "";
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-label") {
+          const lab = actEl && actEl.getAttribute("data-label");
+          const roi = state.artificalRois.find((r) => r.id === state.artificalRoiId);
+          if (!roi) {
+            showToast(state.lang === "zh-CN" ? "请先选择 ROI" : "Select a ROI first");
+            return;
+          }
+          if (lab) roi.label = lab;
+          state.artificalLabelModal = false;
+          refreshOpenTool(host, "artificalAddDefect");
+          showToast(state.lang === "zh-CN" ? `标签: ${lab}` : `Label: ${lab}`);
+          return;
+        }
+        if (act === "art-clear") {
+          if (!state.artificalRois.length) return;
+          state.artificalConfirm = "clear";
+          state.artificalConfirmId = null;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-deselect") {
+          state.artificalRoiId = null;
+          state.artificalLabelModal = false;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-finish") {
+          if (!state.artificalRois.length) {
+            showToast(state.lang === "zh-CN" ? "请至少框选一个 ROI" : "Draw at least one ROI");
+            return;
+          }
+          const unlabeled = state.artificalRois.filter((r) => !r.label).length;
+          if (unlabeled) {
+            showToast(state.lang === "zh-CN" ? "请为每个 ROI 选择标签" : "Label every ROI");
+            return;
+          }
+          state.artificalConfirm = "finish";
+          state.artificalConfirmId = null;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-confirm-cancel") {
+          state.artificalConfirm = null;
+          state.artificalConfirmId = null;
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+        if (act === "art-confirm-ok") {
+          const kind = state.artificalConfirm;
+          const cid = state.artificalConfirmId;
+          state.artificalConfirm = null;
+          state.artificalConfirmId = null;
+          if (kind === "clear") {
+            state.artificalRois = [];
+            state.artificalRoiId = null;
+            refreshOpenTool(host, "artificalAddDefect");
+            showToast(state.lang === "zh-CN" ? "已清空" : "Cleared");
+            return;
+          }
+          if (kind === "delete") {
+            state.artificalRois = state.artificalRois.filter((r) => r.id !== cid);
+            if (state.artificalRoiId === cid) state.artificalRoiId = null;
+            refreshOpenTool(host, "artificalAddDefect");
+            showToast(state.lang === "zh-CN" ? `已删除 ROI-${cid}` : `Deleted ROI-${cid}`);
+            return;
+          }
+          if (kind === "ticket") {
+            const roi = state.artificalRois.find((r) => r.id === cid);
+            const x = roi ? Number(roi.x).toFixed(0) : "?";
+            refreshOpenTool(host, "artificalAddDefect");
+            showToast(state.lang === "zh-CN" ? `贴标已触发，X=${x}` : `Labeling triggered, X=${x}`);
+            return;
+          }
+          if (kind === "finish") {
+            // 预览：把漏检写入疵点列表
+            state.artificalRois.forEach((r) => {
+              const nextId = DEFECTS.reduce((m, d) => Math.max(m, d.id), 0) + 1;
+              DEFECTS.push({
+                id: nextId,
+                title: r.label || "Manual",
+                grade: "II",
+                y: Math.max(0, state.lengthM),
+                x: Math.min(1, Math.max(0, (Number(r.x) || 0) / 1200)),
+              });
+              state.selectedId = nextId;
+            });
+            const n = state.artificalRois.length;
+            state.artificalRois = [];
+            state.artificalRoiId = null;
+            renderDefects();
+            renderMetrics();
+            showToast(state.lang === "zh-CN" ? `已保存 ${n} 个漏检` : `Saved ${n} defects`);
+            host.close();
+            return;
+          }
+          refreshOpenTool(host, "artificalAddDefect");
+          return;
+        }
+
+        // ── artifical_edit_defect ──
+        if (act === "edit-select") {
+          const id = host._pendingEditId != null ? host._pendingEditId
+            : (actEl && Number(actEl.getAttribute("data-id")));
+          host._pendingEditId = null;
+          if (!Number.isFinite(id)) return;
+          state.editSelectedId = id;
+          state.selectedId = id;
+          refreshOpenTool(host, "artificalEditDefect");
+          return;
+        }
+        if (act === "edit-save") {
+          const id = state.editSelectedId != null ? state.editSelectedId : state.selectedId;
+          const d = DEFECTS.find((x) => x.id === id);
+          if (!d) {
+            showToast(state.lang === "zh-CN" ? "未选择疵点" : "No defect selected");
+            return;
+          }
+          const typeEl = document.getElementById("spxEditType");
+          const xEl = document.getElementById("spxEditX");
+          const yEl = document.getElementById("spxEditY");
+          const lenEl = document.getElementById("spxEditLen");
+          const widEl = document.getElementById("spxEditWid");
+          if (typeEl) d.title = typeEl.value || d.title;
+          const widthMm = Math.max(200, Number(state.widthCm || 150) * 10);
+          if (xEl) {
+            const xmm = Math.max(0, Number(xEl.value) || 0);
+            d.xMm = xmm;
+            d.x = Math.min(1, xmm / widthMm);
+          }
+          if (yEl) {
+            const ymm = Math.max(0, Number(yEl.value) || 0);
+            d.yMm = ymm;
+            d.y = ymm / 1000;
+          }
+          if (lenEl) d.lengthMm = Math.max(0, Number(lenEl.value) || 0);
+          if (widEl) d.widthMm = Math.max(0, Number(widEl.value) || 0);
+          d.areaMm2 = (d.lengthMm || 0) * (d.widthMm || 0);
+          renderDefects();
+          renderMetrics();
+          refreshOpenTool(host, "artificalEditDefect");
+          showToast(state.lang === "zh-CN" ? "已保存" : "Saved");
+          return;
+        }
+        if (act === "edit-delete") {
+          state.editConfirm = "delete";
+          refreshOpenTool(host, "artificalEditDefect");
+          return;
+        }
+        if (act === "edit-finish") {
+          state.editConfirm = "finish";
+          refreshOpenTool(host, "artificalEditDefect");
+          return;
+        }
+        if (act === "edit-confirm-cancel") {
+          state.editConfirm = null;
+          refreshOpenTool(host, "artificalEditDefect");
+          return;
+        }
+        if (act === "edit-confirm-ok") {
+          const kind = state.editConfirm;
+          state.editConfirm = null;
+          if (kind === "delete") {
+            const id = state.editSelectedId != null ? state.editSelectedId : state.selectedId;
+            const idx = DEFECTS.findIndex((x) => x.id === id);
+            if (idx >= 0) DEFECTS.splice(idx, 1);
+            state.editSelectedId = DEFECTS[0] ? DEFECTS[0].id : null;
+            state.selectedId = state.editSelectedId;
+            renderDefects();
+            renderMetrics();
+            if (!DEFECTS.length) {
+              showToast(state.lang === "zh-CN" ? "已删除，列表为空" : "Deleted — list empty");
+              host.close();
+              return;
+            }
+            refreshOpenTool(host, "artificalEditDefect");
+            showToast(state.lang === "zh-CN" ? "已删除" : "Deleted");
+            return;
+          }
+          if (kind === "finish") {
+            showToast(state.lang === "zh-CN" ? "编辑完成" : "Edit finished");
+            host.close();
+            return;
+          }
+          refreshOpenTool(host, "artificalEditDefect");
+          return;
+        }
+
+        // ── artifical_add_width ──
+        if (act === "width-reset") {
+          if (host._toolApi && typeof host._toolApi.reset === "function") host._toolApi.reset();
+          showToast(state.lang === "zh-CN" ? "已重测" : "Reset");
+          return;
+        }
+        if (act === "width-save") {
+          try {
+            const m = (host._toolApi && typeof host._toolApi.save === "function")
+              ? await host._toolApi.save()
+              : (host._toolApi && host._toolApi.measure ? host._toolApi.measure() : state.netWidth);
+            if (!m || m.width == null) {
+              showToast(state.lang === "zh-CN" ? "请先标定左右布边" : "Place both edges first");
+              return;
+            }
+            state.netWidth = Object.assign({}, state.netWidth, m, { last: m.width });
+            state.widthCm = Number(m.width) || state.widthCm;
+            renderMetrics();
+            showToast(state.lang === "zh-CN"
+              ? `净幅宽 ${Number(m.width).toFixed(1)} cm`
+              : `Net width ${Number(m.width).toFixed(1)} cm`);
+            host.close();
+          } catch (e) {
+            showToast((e && e.message) || String(e));
+          }
+          return;
+        }
+
+        // ── DetectionRecords ──
+        if (act === "rec-filter") {
+          const f = actEl ? Number(actEl.getAttribute("data-filter")) : 0;
+          state.recordsUi.filter = Number.isFinite(f) ? f : 0;
+          state.recordsUi.page = 1;
+          refreshOpenTool(host, "records");
+          return;
+        }
+        if (act === "rec-query-type") {
+          const sel = document.getElementById("popRecQueryType");
+          state.recordsUi.queryType = sel ? Number(sel.value) || 0 : 0;
+          refreshOpenTool(host, "records");
+          return;
+        }
+        if (act === "rec-search") {
+          const v = document.getElementById("popRecQueryValue");
+          const d1 = document.getElementById("popRecDate");
+          const d2 = document.getElementById("popRecDate2");
+          const qt = document.getElementById("popRecQueryType");
+          if (qt) state.recordsUi.queryType = Number(qt.value) || 0;
+          if (v) state.recordsUi.queryValue = v.value || "";
+          if (d1) state.recordsUi.queryDate = d1.value || "";
+          if (d2) state.recordsUi.queryDate2 = d2.value || "";
+          state.recordsUi.page = 1;
+          refreshOpenTool(host, "records");
+          showToast(state.lang === "zh-CN" ? "已查询" : "Searched");
+          return;
+        }
+        if (act === "rec-page") {
+          const p = actEl ? Number(actEl.getAttribute("data-page")) : 1;
+          state.recordsUi.page = Math.max(1, p || 1);
+          refreshOpenTool(host, "records");
+          return;
+        }
+        if (act === "rec-jump") {
+          const inp = document.getElementById("popRecJump");
+          state.recordsUi.page = Math.max(1, Number(inp && inp.value) || 1);
+          refreshOpenTool(host, "records");
+          return;
+        }
+        if (act === "rec-export") {
+          showToast(state.lang === "zh-CN" ? "导出数据（预览）" : "Export (preview)");
+          return;
+        }
+        if (act === "rec-total-len") {
+          state.recordsUi.totalLengthM = state.todayM;
+          refreshOpenTool(host, "records");
+          showToast(
+            state.lang === "zh-CN"
+              ? `检验长度 ${state.todayM.toFixed(0)} m`
+              : `Length ${state.todayM.toFixed(0)} m`
+          );
+          return;
+        }
+        if (act === "rec-order") {
+          const finished = actEl && actEl.getAttribute("data-finished") === "1";
+          showToast(
+            finished
+              ? (state.lang === "zh-CN" ? "查看报告" : "Open report")
+              : (state.lang === "zh-CN" ? "检验此单" : "Inspect sheet")
+          );
+          return;
+        }
+        if (act === "rec-checkid") {
+          showToast((state.lang === "zh-CN" ? "误检统计 · " : "Mistake stats · ") + (actEl ? actEl.textContent : ""));
+          return;
+        }
+        if (act === "rec-print") {
+          showToast(state.lang === "zh-CN" ? "打印标签（预览）" : "Print label (preview)");
+          return;
+        }
+
+        showToast(act);
+      },
+    });
+
+    document.querySelectorAll("[data-popup]").forEach((el) => {
+      el.addEventListener("click", () => {
+        popupHost.open(el.getAttribute("data-popup"), el);
+      });
+    });
+
+    $("btnDefectAdd").addEventListener("click", () => {
+      // 对齐 DefectList::on_ButtonAddClicked → artifical_add_defect（SPX）
+      popupHost.open("artificalAddDefect", $("btnDefectAdd"));
+    });
+    $("btnDefectEdit").addEventListener("click", () => {
+      if (!DEFECTS.find((d) => d.id === state.selectedId)) {
+        showToast(state.lang === "zh-CN" ? "请先选择疵点" : "Select a defect first");
+        return;
+      }
+      // 对齐 DefectList 编辑 → artifical_edit_defect（SPX）
+      state.editSelectedId = state.selectedId;
+      state.editConfirm = null;
+      popupHost.open("artificalEditDefect", $("btnDefectEdit"));
+    });
+
+    $("btnRun").addEventListener("click", () => {
+      state.running = !state.running;
+      updateRunBtn();
+      showToast(state.running ? t("start") : t("pause"));
+    });
+
+    $("lang").addEventListener("change", (e) => {
+      state.lang = e.target.value;
+      applyI18n();
+      if (popupHost.activeKey) popupHost.open(popupHost.activeKey, popupHost.triggerEl);
+    });
+
+    $("btnExit").addEventListener("click", () => showToast(t("exit")));
+
+    window.addEventListener("resize", () => {
+      if (popupHost.activeKey) popupHost.open(popupHost.activeKey, popupHost.triggerEl);
+    });
+
+    tickClock();
+    setInterval(tickClock, 1000);
+    applyI18n();
+    renderMetrics();
+    renderDefects();
+    setInterval(demoTick, 400);
+  </script>
+</body>
+</html>
+
+
