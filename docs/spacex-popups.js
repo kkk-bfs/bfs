@@ -1,21 +1,19 @@
 /**
  * CustomUIV3 SpaceX HUD 弹窗 — 字段/交互参考 viewsvue/realtimev3
- * Quick: 舞台内约 50%×80%；Center: 约 95%×95%（mid-band 键仅铺满顶底栏之间）；
- * Form: 居中约 480–560（检验单）；Left: 贴疵点列表左侧旁（疵点详情）；Info: 居中约 1/3 宽
- * Tool/mid-band: DefectAidedSelection / artifical_add_defect / artifical_edit_defect / defectAdd / defectEdit
- * slot_show 对齐 RealTimeDetection::slot_show：
- * noclothstop / empty_sheet_stop / noclothstop_clothfinish /
- * loop_stop / cloth_finish_stop / mid_sample_stop / width_sample_stop / colordiffalarm
- * netWidthNeedStart / netWidthNeedStop
+ * 尺寸分类（与 SpxPopupHost::computeGeometry / UI_POPUP_SIZE_* 对齐）：
+ * - 登录/关于：LOGIN 默认 30%×50% 居中
+ * - 机台提示：SYSMSG 默认 50%×50% 居中
+ * - 检验单新建/编辑：SHEET 默认 40%×80% 居中
+ * - 信息弹窗（指标/设备）：INFO 默认 60%×60%，按钮 X 对中
+ * - 设置弹窗（调试/设置/疵点设置）：SETTINGS 默认 60%×100%，按钮 X 对中
+ * - 工具类：铺满中间区；Left：疵点详情旁挂
  */
 (function (global) {
   "use strict";
 
+  /** 工具类：铺满中间区 */
   const CENTER_KEYS = new Set([
     "records",
-    "defectSettings",
-    "debug",
-    "unwind",
     "defectAidedSelection",
     "artificalAddDefect",
     "artificalEditDefect",
@@ -24,10 +22,8 @@
     "defectEdit",
   ]);
 
-  /** 铺满顶底栏之间的中间区（对齐 SpxPopupHost::isFullStageCenterKey） */
   const MID_BAND_KEYS = new Set([
     "records",
-    "defectSettings",
     "artificalAddDefect",
     "artificalEditDefect",
     "artificalAddWidth",
@@ -44,13 +40,40 @@
     "artificalAddWidth",
   ]);
 
-  /** 登录/检验单：居中紧凑，避免铺满舞台 */
+  /** 系统信息：登录/关于/机台提示 → form → 50%×50% 居中 */
   const FORM_KEYS = new Set([
     "login",
+    "about",
+    "finishSheet",
+    "noclothstop",
+    "empty_sheet_stop",
+    "noclothstop_clothfinish",
+    "loop_stop",
+    "cloth_finish_stop",
+    "mid_sample_stop",
+    "width_sample_stop",
+    "colordiffalarm",
+    "netWidthNeedStart",
+    "netWidthNeedStop",
+    "editNeedStop",
+  ]);
+
+  /** 检验单新建/编辑 → info → 60%×80% 居中 */
+  const SHEET_EDITOR_KEYS = new Set([
     "erpNewSheet",
     "erpEditSheet",
-    "fourPoints",
   ]);
+
+  /** 设置弹窗 → quick + SETTINGS → 60%×100% 中间高 */
+  const SETTINGS_KEYS = new Set([
+    "debug",
+    "systemSettings",
+    "defectSettings",
+  ]);
+
+  /** 兼容旧名：机台提示已并入 FORM_KEYS */
+  const INFO_KEYS = FORM_KEYS;
+  const LOGIN_SIZE_KEYS = new Set(["login"]);
 
   /** 定时 refresh 会冲掉输入与 tab，这些弹窗跳过整页重建 */
   const NO_LIVE_REFRESH_KEYS = new Set([
@@ -64,9 +87,10 @@
     "defectSettings",
     "records",
     "debug",
-    "plc", // 快调滑条/撤销态：重建会刷回旧 setpoint
-    "light", // 布色/滑条设亮度后，列表接口滞后会把 UI 刷回旧值
-    "artificalAddDefect", // 标注态 / 标签弹窗 / 画布交互
+    "plc",
+    "light",
+    "widthSensor",
+    "artificalAddDefect",
     "artificalEditDefect",
     "artificalAddWidth",
     "defectAidedSelection",
@@ -77,37 +101,21 @@
     "defectDetail",
   ]);
 
-  /** 基本信息弹窗（对齐 BFSMessageBox / NoClothStopDialog） */
-  const INFO_KEYS = new Set([
-    "noclothstop",
-    "empty_sheet_stop",
-    "noclothstop_clothfinish",
-    "loop_stop",
-    "cloth_finish_stop",
-    "mid_sample_stop",
-    "width_sample_stop",
-    "colordiffalarm",
-    "finishSheet",
-    "netWidthNeedStart",
-    "netWidthNeedStop",
-  ]);
-
-  /** 顶栏控制弹窗 */
   const HEADER_OPACITY_KEYS = new Set([
     "plc",
     "camera",
     "light",
     "alarm",
+    "widthSensor",
     "login",
     "systemSettings",
+    "debug",
     "about",
   ]);
 
-  /** 全屏弹窗（检验记录 / 疵点设置 / 详情 / 标注工具） */
   const FULLSCREEN_OPACITY_KEYS = new Set([
     "records",
     "defectSettings",
-    "debug",
     "defectDetail",
     "defectAdd",
     "defectEdit",
@@ -120,8 +128,8 @@
   const POPUP_OPACITY_DEFAULTS = {
     header: 100,
     bottom: 100,
-    system: 88,
-    fullscreen: 88,
+    system: 100,
+    fullscreen: 100,
   };
 
   function popupOpacityKind(key) {
@@ -132,38 +140,19 @@
   }
 
   function popupOpacityPercent(ctx, key) {
-    const kind = popupOpacityKind(key);
-    const s = (ctx && ctx.state) || {};
-    const map = {
-      header: "UI_POPUP_OPACITY_HEADER",
-      bottom: "UI_POPUP_OPACITY_BOTTOM",
-      system: "UI_POPUP_OPACITY_SYSTEM",
-      fullscreen: "UI_POPUP_OPACITY_FULLSCREEN",
-    };
-    const aliases = {
-      header: ["popupOpacityHeader", "UI_POPUP_OPACITY_HEADER"],
-      bottom: ["popupOpacityBottom", "UI_POPUP_OPACITY_BOTTOM"],
-      system: ["popupOpacitySystem", "UI_POPUP_OPACITY_SYSTEM"],
-      fullscreen: ["popupOpacityFullscreen", "UI_POPUP_OPACITY_FULLSCREEN"],
-    };
-    let v = POPUP_OPACITY_DEFAULTS[kind];
-    const keys = aliases[kind] || [map[kind]];
-    for (const k of keys) {
-      if (s[k] != null && s[k] !== "") {
-        const n = Number(s[k]);
-        if (Number.isFinite(n)) {
-          v = n;
-          break;
-        }
-      }
-    }
-    return Math.max(40, Math.min(100, Math.round(v)));
+    // 全部弹窗强制不透明
+    void ctx;
+    void key;
+    void popupOpacityKind;
+    void POPUP_OPACITY_DEFAULTS;
+    return 100;
   }
 
   function applyPopupOpacity(shell, ctx, key) {
     if (!shell) return;
-    const pct = popupOpacityPercent(ctx, key);
-    shell.style.opacity = String(pct / 100);
+    void ctx;
+    void key;
+    shell.style.opacity = "1";
   }
 
   const TITLES = {
@@ -198,6 +187,7 @@
       artificalAddDefect: "疵点标注工具",
       artificalEditDefect: "疵点编辑",
       artificalAddWidth: "净幅宽测量",
+      widthSensor: "幅宽传感器 · 布边设置",
       noclothstop: "警告",
       empty_sheet_stop: "警告",
       noclothstop_clothfinish: "警告",
@@ -207,6 +197,7 @@
       width_sample_stop: "警告",
       netWidthNeedStart: "警告",
       netWidthNeedStop: "警告",
+      editNeedStop: "警告",
       colordiffalarm: "颜色差异报警",
     },
     en: {
@@ -240,6 +231,7 @@
       artificalAddDefect: "Defect Annotation",
       artificalEditDefect: "Defect Edit",
       artificalAddWidth: "Net Width Measure",
+      widthSensor: "Width Sensor · Edge",
       noclothstop: "Warning",
       empty_sheet_stop: "Warning",
       noclothstop_clothfinish: "Warning",
@@ -249,6 +241,7 @@
       width_sample_stop: "Warning",
       netWidthNeedStart: "Warning",
       netWidthNeedStop: "Warning",
+      editNeedStop: "Warning",
       colordiffalarm: "Color Diff Alarm",
     },
   };
@@ -281,48 +274,140 @@
     return `<button type="button" class="ghost-btn" ${attrs || ""}>${text}</button>`;
   }
 
+  function normalizeLoginUsers(list) {
+    const users = Array.isArray(list) ? list : [];
+    return users
+      .map((u) => ({
+        id: u && (u.id != null ? u.id : u.ID),
+        name: String((u && (u.name || u.Name || u.inspectorNo || u.InspectorNo)) || "").trim(),
+        inspectorNo: String((u && (u.inspectorNo || u.InspectorNo || "")) || "").trim(),
+      }))
+      .filter((u) => !!u.name);
+  }
+
+  function renderLoginUserChips(users, picked, zh) {
+    return users
+      .map((u) => {
+        const n = u.name || "";
+        if (!n) return "";
+        const sel = n === picked ? " active" : "";
+        const initial = String(n).trim().charAt(0).toUpperCase() || "?";
+        const no = u.inspectorNo ? `<span class="spx-login-uno">${escapeAttr(u.inspectorNo)}</span>` : "";
+        const idAttr = u.id != null && u.id !== "" ? String(u.id) : "";
+        const delBtn = idAttr
+          ? `<button type="button" class="spx-login-del" data-act="login-del-ask" data-id="${escapeAttr(idAttr)}" data-user="${escapeAttr(n)}" title="${zh ? "删除" : "Delete"}" aria-label="${zh ? "删除" : "Delete"}">×</button>`
+          : "";
+        return `<div class="spx-login-user${sel}" data-act="login-pick-user" data-user="${escapeAttr(n)}" data-id="${escapeAttr(idAttr)}" role="button" tabindex="0">
+          ${delBtn}
+          <span class="spx-login-avatar" aria-hidden="true">${escapeAttr(initial)}</span>
+          <span class="spx-login-uname">${n}</span>
+          ${no}
+        </div>`;
+      })
+      .join("");
+  }
+
+  function renderLoginUserOptions(users, picked) {
+    return users
+      .map((u) => {
+        const n = u.name || "";
+        return `<option value="${escapeAttr(n)}" ${n === picked ? "selected" : ""}>${n}</option>`;
+      })
+      .join("");
+  }
+
   function buildLogin(ctx) {
-    // 对齐 CustomUI Login / bfslogin：类型切换后只显示用户或密码，对接 /realtime/login
-    // 已是管理员时显示登出，便于收回调试权限
+    // 触摸屏优先：管理员→密码；操作员→点选 + 新增；对接 /realtime/login|users/*
     const zh = ctx.lang === "zh-CN";
-    const users = Array.isArray(ctx.users) && ctx.users.length
-      ? ctx.users
-      : [{ name: "OPERATOR" }, { name: "QA" }, { name: "INSPECTOR" }];
+    let users = normalizeLoginUsers(ctx.users);
+    if (!users.length) {
+      users = [
+        { name: "OPERATOR", inspectorNo: "001" },
+        { name: "QA", inspectorNo: "002" },
+        { name: "INSPECTOR", inspectorNo: "003" },
+      ];
+    }
     const curInspector = (ctx.sheet && ctx.sheet.userName) || "";
     const isAdminNow = !!(ctx.about && ctx.about.isAdmin);
     const curAuth = isAdminNow ? "admin" : "user";
-    const opts = users
-      .map((u) => {
-        const n = u.name || u.inspectorNo || "";
-        return `<option value="${n}" ${n === curInspector ? "selected" : ""}>${n}</option>`;
-      })
-      .join("");
+    const picked = curInspector || (users[0] && users[0].name) || "";
     const status = isAdminNow
-      ? `<div class="spx-plc-msg ok">${zh ? "当前：管理员已登录" : "Signed in as Admin"}</div>`
+      ? `<div class="spx-login-status is-admin"><span class="spx-login-dot"></span>${zh ? "管理员已登录" : "Admin signed in"}</div>`
       : (curInspector
-        ? `<div class="spx-plc-msg">${zh ? `当前：${curInspector}` : `Current: ${curInspector}`}</div>`
-        : "");
+        ? `<div class="spx-login-status"><span class="spx-login-dot"></span>${zh ? `当前操作员 · ${curInspector}` : `Operator · ${curInspector}`}</div>`
+        : `<div class="spx-login-status is-guest"><span class="spx-login-dot"></span>${zh ? "未登录 · 请选择身份" : "Guest · select identity"}</div>`);
     const logoutBtn = isAdminNow
-      ? ghostBtn(zh ? "登出" : "Logout", 'data-act="login-logout"')
+      ? `<button type="button" class="ghost-btn spx-login-btn" data-act="login-logout">${zh ? "登出" : "Logout"}</button>`
       : "";
     return `
-      ${section(zh ? "登录" : "Login")}
-      ${status}
-      ${field(zh ? "类型" : "Type", `
-        <select id="popLoginType" data-act="login-type">
+      <div class="spx-login ${curAuth === "admin" ? "is-admin" : "is-user"}" id="popLoginRoot">
+        <header class="spx-login-hero">
+          <div class="spx-login-mark" aria-hidden="true">B</div>
+          <div class="spx-login-hero-text">
+            <div class="spx-login-brand-row">
+              <div class="spx-login-brand">Bullmer</div>
+              ${status}
+            </div>
+            <div class="spx-login-sub">${zh ? "选择身份进入验布台" : "Select identity"}</div>
+          </div>
+        </header>
+        <div class="spx-login-seg" role="group" aria-label="${zh ? "登录类型" : "Sign-in type"}">
+          <button type="button" class="spx-login-seg-btn${curAuth !== "admin" ? " active" : ""}" data-act="login-type" data-type="user">${zh ? "操作员" : "Operator"}</button>
+          <button type="button" class="spx-login-seg-btn${curAuth === "admin" ? " active" : ""}" data-act="login-type" data-type="admin">${zh ? "管理员" : "Admin"}</button>
+        </div>
+        <select id="popLoginType" hidden aria-hidden="true">
           <option value="user" ${curAuth !== "admin" ? "selected" : ""}>${zh ? "操作员" : "Operator"}</option>
           <option value="admin" ${curAuth === "admin" ? "selected" : ""}>${zh ? "管理员" : "Admin"}</option>
-        </select>`)}
-      <div id="popLoginUserRow" ${curAuth === "admin" ? "hidden" : ""}>
-        ${field(zh ? "用户" : "User", `<select id="popLoginUser">${opts}</select>`)}
-      </div>
-      <div id="popLoginPassRow" ${curAuth === "admin" ? "" : "hidden"}>
-        ${field(zh ? "密码" : "Password", `<input id="popLoginPass" type="password" placeholder="••••••" data-osk="1" />`)}
-      </div>
-      <div id="popLoginMsg" class="spx-plc-msg" style="min-height:1.2em"></div>
-      <div class="spx-actions">
-        ${logoutBtn}
-        ${ghostBtn(zh ? "登录" : "Login", 'data-act="login-ok"')}
+        </select>
+        <div class="spx-login-main">
+          <div id="popLoginUserRow" class="spx-login-pane spx-login-pane-user"${curAuth === "admin" ? " hidden" : ""}>
+            <div class="spx-login-label-row">
+              <div class="spx-login-label">${zh ? "选择操作员" : "Operator"}</div>
+              <button type="button" class="ghost-btn compact spx-login-add-toggle" data-act="login-add-toggle">${zh ? "+ 新增" : "+ Add"}</button>
+            </div>
+            <div class="spx-login-users" id="popLoginUsers">${renderLoginUserChips(users, picked, zh)}</div>
+            <select id="popLoginUser" hidden aria-hidden="true">${renderLoginUserOptions(users, picked)}</select>
+            <div class="spx-login-add" id="popLoginAdd" hidden>
+              <div class="spx-login-add-card">
+                <div class="spx-login-add-title">${zh ? "新增操作员" : "New operator"}</div>
+                <label class="spx-login-add-field">
+                  <span>${zh ? "姓名" : "Name"}</span>
+                  <input id="popLoginAddName" class="spx-login-add-inp" type="text" data-osk="1" placeholder="${zh ? "请输入姓名" : "Enter name"}" autocomplete="off" />
+                </label>
+                <label class="spx-login-add-field">
+                  <span>${zh ? "工号" : "ID No."}</span>
+                  <input id="popLoginAddNo" class="spx-login-add-inp" type="text" data-osk="1" inputmode="numeric" placeholder="${zh ? "请输入工号" : "Enter ID"}" autocomplete="off" />
+                </label>
+                <div class="spx-login-add-actions">
+                  <button type="button" class="ghost-btn spx-login-add-cancel" data-act="login-add-cancel">${zh ? "取消" : "Cancel"}</button>
+                  <button type="button" class="run-btn running spx-login-add-ok" data-act="login-add-user">${zh ? "确认添加" : "Add"}</button>
+                </div>
+              </div>
+            </div>
+            <div class="spx-login-confirm" id="popLoginConfirm" hidden>
+              <div class="spx-login-confirm-card" role="dialog" aria-modal="true">
+                <div class="spx-login-confirm-title">${zh ? "删除确认" : "Confirm delete"}</div>
+                <div class="spx-login-confirm-msg" id="popLoginConfirmMsg"></div>
+                <div class="spx-login-confirm-actions">
+                  <button type="button" class="ghost-btn" data-act="login-del-cancel">${zh ? "取消" : "Cancel"}</button>
+                  <button type="button" class="ghost-btn danger spx-login-del-ok" data-act="login-del-ok">${zh ? "删除" : "Delete"}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="popLoginPassRow" class="spx-login-pane spx-login-pane-pass"${curAuth === "admin" ? "" : " hidden"}>
+            <div class="spx-login-label">${zh ? "管理员密码" : "Admin password"}</div>
+            <label class="spx-login-pass-wrap">
+              <span class="spx-login-pass-ico" aria-hidden="true"></span>
+              <input id="popLoginPass" class="spx-login-pass" type="password" placeholder="${zh ? "输入密码" : "Enter password"}" data-osk="1" inputmode="numeric" autocomplete="off" />
+            </label>
+          </div>
+        </div>
+        <div id="popLoginMsg" class="spx-login-msg" aria-live="polite"></div>
+        <div class="spx-actions spx-login-actions">
+          ${logoutBtn}
+          <button type="button" class="run-btn running spx-login-ok" data-act="login-ok">${zh ? "确认登录" : "Sign in"}</button>
+        </div>
       </div>`;
   }
 
@@ -380,16 +465,18 @@
       <div class="spx-about-btns">${homeBtn}${logBtn}</div>`;
 
     return `
-      ${section(zh ? "版本信息" : "Version Info")}
-      ${testBanner}
-      ${kv("Version", version)}
-      ${kv("BuildTime", `${buildTime}_${gitInfo}`)}
-      ${kv("MachineProject", machineProject)}
-      ${kv("MachineSerial", machineSerial)}
-      ${kv("ERPFactory", erpFactory)}
-      ${kv("InstallDate", installDate)}
-      ${notesBlock}
-      ${actions}`;
+      <div class="spx-about">
+        ${section(zh ? "版本信息" : "Version Info")}
+        ${testBanner}
+        ${kv("Version", version)}
+        ${kv("BuildTime", `${buildTime}_${gitInfo}`)}
+        ${kv("MachineProject", machineProject)}
+        ${kv("MachineSerial", machineSerial)}
+        ${kv("ERPFactory", erpFactory)}
+        ${kv("InstallDate", installDate)}
+        ${notesBlock}
+        ${actions}
+      </div>`;
   }
 
   function plcCtrlRow(opts) {
@@ -513,25 +600,35 @@
     return parts.length ? parts.join("/") : (zh ? "无报警" : "OK");
   }
 
-  function plcTile(id, label, value, warn) {
+  function plcTile(id, label, value, unit, warn) {
     return `<div class="spx-plct-tile${warn ? " warn" : ""}">
       <div class="cap">${label}</div>
-      <div class="val" data-plct="${id}">${value}</div>
+      <div class="tile-body">
+        <span class="val" data-plct="${id}">${value}</span>
+        ${unit ? `<span class="unit">${unit}</span>` : ""}
+      </div>
     </div>`;
   }
 
-  function plcLive(id, label, value) {
-    return `<div class="spx-plct-kv"><span class="k">${label}</span><span class="v" data-plct="${id}">${value}</span></div>`;
+  function plcRoRow(id, label, value, unit) {
+    return `<div class="spx-plct-form-row">
+      <span class="spx-plct-form-k">${label}</span>
+      <div class="spx-plct-unit readonly">
+        <span class="unit-value" data-plct="${id}">${value}</span>
+        ${unit ? `<span class="unit-suffix">${unit}</span>` : ""}
+      </div>
+    </div>`;
   }
 
-  function plcParam(id, label, value, unit) {
-    return `<label class="spx-plct-param">
-      <span class="k">${label}${unit ? ` <em>${unit}</em>` : ""}</span>
-      <span class="ctrl">
+  function plcParam(id, label, value, unit, applyText) {
+    return `<div class="spx-plct-form-row param">
+      <label class="spx-plct-form-k" for="${id}">${label}</label>
+      <div class="spx-plct-unit">
         <input type="text" inputmode="decimal" id="${id}" class="spx-plct-inp" data-osk="1" value="${value}" />
-        <button type="button" class="ghost-btn compact" data-act="plct-apply" data-field="${id}">↵</button>
-      </span>
-    </label>`;
+        ${unit ? `<span class="unit-suffix">${unit}</span>` : ""}
+      </div>
+      <button type="button" class="ghost-btn compact spx-plct-apply" data-act="plct-apply" data-field="${id}">${applyText || "↵"}</button>
+    </div>`;
   }
 
   function plcCmd(text, cmd, cls) {
@@ -549,170 +646,232 @@
     </label>`;
   }
 
-  /** 对齐 CustomUI/PLCTest：系统参数与手动分离；手动走二级弹窗 */
+  function plcSwitch(id, label, onCmd, offCmd, checked) {
+    return `<div class="spx-plct-switch-row">
+      <span class="spx-plct-form-k">${label}</span>
+      <label class="spx-plct-switch">
+        <input type="checkbox" id="${id}" data-act="plct-toggle" data-on="${onCmd}" data-off="${offCmd}" ${checked ? "checked" : ""} />
+        <span class="spx-plct-slider"></span>
+      </label>
+    </div>`;
+  }
+
+  /** unwind：嵌入已做好的 CustomUIV3/tuning/plc.html（SPX 风格 PLC Tool） */
+  function buildPlcTestFrame(ctx) {
+    const zh = ctx.lang === "zh-CN";
+    const src = debugToolUrl("/customuiv3/tuning/plc.html", ctx.lang || (zh ? "zh-CN" : "en-US"));
+    return `
+      <div class="spx-plct-frame-wrap" id="popPlcTestFrame">
+        <iframe class="spx-plct-frame" title="${zh ? "PLC 调试" : "PLC Test"}" src="${src}" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      </div>`;
+  }
+
+  /** unwind.html：SPX 版 plctest；非管理员仅状态+基本参数，管理员可见系统/贴标/IO/手动 */
   function buildPlcTest(ctx) {
     const zh = ctx.lang === "zh-CN";
     const isAdmin = !!(ctx.about && ctx.about.isAdmin);
+    const applyTxt = zh ? "写入" : "Apply";
     const st = (ctx.state && ctx.state.plc) || {};
     const s = metricState(ctx.state);
     const connected = !!st.is_connected;
     const len = fmtPlc(st.fabric_length != null ? st.fabric_length : s.lengthM, 2);
     const spd = fmtPlc(st.servo_speed != null ? st.servo_speed : s.speed, 2);
     const alarm = plcAlarmText(st, zh);
-    const unwind = fmtPlc(s.unwind, 0) + "%";
     const breadth = st.plc_fabric_width != null ? st.plc_fabric_width : st.fabric_width;
     const labelDone = Number(st.label_finish_stop) !== 0;
+    const reverse = !!st.shaft_rotation_reverse;
+    const modeText = reverse ? (zh ? "反转" : "Reverse") : (zh ? "正转" : "Forward");
+    const lang = ctx.lang || (zh ? "zh-CN" : "en-US");
 
     const livePanel = `
-      <div class="spx-plct-panel">
-        <div class="spx-plct-h">${zh ? "实时状态" : "Live"}</div>
-        <div class="spx-plct-live fill">
-          ${plcLive("encoder", zh ? "编码器" : "Encoder", fmtPlc(st.encoder, 0))}
-          ${plcLive("servo", zh ? "伺服" : "Servo", fmtPlc(st.servo_value, 2))}
-          ${plcLive("motor", zh ? "主电机" : "Motor", fmtPlc(st.speed, 2))}
-          ${plcLive("encSpd", zh ? "编码速度" : "Enc Spd", fmtPlc(st.servo_speed, 2))}
-          ${plcLive("fabTen", zh ? "验布张力" : "Fabric", fmtPlc(st.fabric_tension_pid != null ? st.fabric_tension_pid : st.tension, 2))}
-          ${plcLive("rollTen", zh ? "收卷张力" : "Roll", fmtPlc(st.roll_tension, 2))}
-          ${plcLive("breadth", zh ? "幅宽" : "Width", fmtPlc(breadth, 2))}
-          ${plcLive("wL", zh ? "幅宽左" : "W-L", fmtPlc(st.width_sensor_left, 2))}
-          ${plcLive("wR", zh ? "幅宽右" : "W-R", fmtPlc(st.width_sensor_right, 2))}
-          ${plcLive("liveW", zh ? "实时重量" : "Live Wt", fmtPlc(st.live_weight, 2))}
-          ${plcLive("lastW", zh ? "最终重量" : "Final Wt", fmtPlc(st.last_weight, 2))}
-          ${plcLive("xyz", "X/Y/Z", `${fmtPlc(st.current_x, "int")} / ${fmtPlc(st.current_y, "int")} / ${fmtPlc(st.current_z, "int")}`)}
+      <section class="spx-plct-panel live">
+        <div class="spx-plct-heading">${zh ? "实时状态" : "Real State"}</div>
+        <div class="spx-plct-panel-body">
+          ${plcRoRow("encoder", zh ? "编码器" : "Encoder", fmtPlc(st.encoder, 0))}
+          ${plcRoRow("servo", zh ? "伺服" : "Servo", fmtPlc(st.servo_value, 2))}
+          ${plcRoRow("motor", zh ? "主电机速度" : "Motor speed", fmtPlc(st.speed, 2), "[m/s]")}
+          ${plcRoRow("encSpd", zh ? "编码器速度" : "Encoder speed", fmtPlc(st.servo_speed, 2), "[m/s]")}
+          ${plcRoRow("fabTen", zh ? "验布张力" : "Fabric tension", fmtPlc(st.fabric_tension_pid != null ? st.fabric_tension_pid : st.tension, 2), "[N]")}
+          ${plcRoRow("rollTen", zh ? "收卷张力" : "Roll tension", fmtPlc(st.roll_tension, 2), "[N]")}
+          ${plcRoRow("breadth", zh ? "门幅" : "Breadth", fmtPlc(breadth, 2), "[cm]")}
+          ${plcRoRow("wL", zh ? "幅宽左" : "Width left", fmtPlc(st.width_sensor_left, 2), "[cm]")}
+          ${plcRoRow("wR", zh ? "幅宽右" : "Width right", fmtPlc(st.width_sensor_right, 2), "[cm]")}
+          ${plcRoRow("liveW", zh ? "当前重量" : "Live weight", fmtPlc(st.live_weight, 2), "[kg]")}
+          ${plcRoRow("lastW", zh ? "最终重量" : "Final weight", fmtPlc(st.last_weight, 2), "[kg]")}
         </div>
-      </div>`;
+      </section>`;
 
     const paramPanel = `
-      <div class="spx-plct-panel">
-        <div class="spx-plct-h">${zh ? "参数设定" : "Setpoints"}</div>
-        <div class="spx-plct-params fill">
-          ${plcParam("plctMotor", zh ? "主电机速度" : "Motor", fmtPlc(st.speed_set, 3), "m/s")}
-          ${plcParam("plctFabric", zh ? "验布张力" : "Fabric", fmtPlc(st.fabric_tension_set, 3), "N")}
-          ${plcParam("plctRoll", zh ? "收卷张力" : "Roll", fmtPlc(st.roll_tension_set, 3), "N")}
-          <label class="spx-plct-check">
-            <input type="checkbox" id="plctReverse" data-act="plct-toggle" data-on="SetReverseMode" data-off="SetForwardMode" ${st.shaft_rotation_reverse ? "checked" : ""} />
-            <span>${zh ? "反转模式" : "Reverse"}</span>
-          </label>
-        </div>
-      </div>`;
-
-    const labelPanel = `
-      <div class="spx-plct-panel">
-        <div class="spx-plct-h">${zh ? "贴标调试" : "Labelling"}</div>
-        <div class="spx-plct-live compact">
-          ${plcLive("lblX", "X", fmtPlc(st.current_x, "int"))}
-          ${plcLive("lblY", "Y", fmtPlc(st.current_y, "int"))}
-          ${plcLive("lblZ", "Z", fmtPlc(st.current_z, "int"))}
-          ${plcLive("lblFin", zh ? "完成" : "Done", labelDone ? (zh ? "是" : "Y") : (zh ? "否" : "N"))}
-        </div>
-        <div class="spx-plct-params fill">
-          ${plcParam("plctHalt", zh ? "停机坐标" : "Halt Y", fmtPlc(st.label_y, "int"), "mm")}
-          ${plcParam("plctLblX", zh ? "贴标 X" : "Label X", fmtPlc(st.label_x, "int"), "mm")}
-          ${plcParam("plctDrop", zh ? "下降高度" : "Drop H", fmtPlc(st.labelling_descent_height, 3), "mm")}
-        </div>
-        <div class="spx-plct-row">
-          ${plcCmd(zh ? "通知贴标" : "Label", "Labelling", "ok")}
-          <button type="button" class="ghost-btn compact" data-act="plct-movex">${zh ? "移动 X" : "Move X"}</button>
-          ${plcCmd(zh ? "贴标归零" : "Lbl0", "LabellerZero")}
-        </div>
-      </div>`;
-
-    const systemPanel = `
-      <div class="spx-plct-panel">
-        <div class="spx-plct-h">${zh ? "系统参数" : "System"}</div>
-        <div class="spx-plct-params dense fill">
-          ${plcParam("plctTenCoef", zh ? "张力系数" : "Ten.coef", fmtPlc(st.tension_factor, 3))}
-          ${plcParam("plctUnreel", zh ? "进/放卷系数" : "Unreel", fmtPlc(st.roll_unreel_factor, 3))}
-          ${plcParam("plctTenDiff", zh ? "叠布速系" : "Stack", fmtPlc(st.differential_tension, 3))}
-          ${plcParam("plctRollDiff", zh ? "收/摆差速" : "Diff", fmtPlc(st.differential_roll, 3))}
-        </div>
-        <div class="spx-plct-sys">
-          ${plcCheck("plctBuzzer", zh ? "蜂鸣器" : "Buzzer", "OpenBuzzer", "CloseBuzzer")}
-          ${plcCheck("plctShield", zh ? "屏蔽无布检测" : "Shield", "OpenShieldDetection", "CloseShieldDetection")}
-        </div>
-        <div class="spx-plct-row">
-          <button type="button" class="ghost-btn compact ok" data-act="plct-manual-open">${zh ? "手动功能…" : "Manual…"}</button>
-        </div>
-      </div>`;
-
-    const manualSub = isAdmin
-      ? `<div class="spx-plct-sub" id="popPlcManual" hidden>
-          <div class="spx-plct-sub-mask" data-act="plct-manual-close"></div>
-          <div class="spx-plct-sub-card" role="dialog" aria-label="${zh ? "手动功能" : "Manual"}">
-            <div class="spx-plct-sub-head">
-              <span>${zh ? "手动功能" : "Manual"}</span>
-              <button type="button" class="ghost-btn compact" data-act="plct-manual-close">×</button>
+      <section class="spx-plct-panel param">
+        <div class="spx-plct-heading">${zh ? "参数设定" : "Parameter Set"}</div>
+        <div class="spx-plct-panel-body">
+          ${plcParam("plctMotor", zh ? "主电机速度设定" : "Motor speed set", fmtPlc(st.speed_set, 3), "[m/s]", applyTxt)}
+          ${plcParam("plctFabric", zh ? "验布张力设定" : "Fabric tension set", fmtPlc(st.fabric_tension_set, 3), "[N]", applyTxt)}
+          ${plcParam("plctRoll", zh ? "收卷张力设定" : "Roll tension set", fmtPlc(st.roll_tension_set, 3), "[N]", applyTxt)}
+          <div class="spx-plct-form-row mode">
+            <span class="spx-plct-form-k">${zh ? "正反转模式" : "Direction"}</span>
+            <div class="spx-plct-mode">
+              <span class="mode-value" data-plct="rollMode">${modeText}</span>
+              <label class="spx-plct-switch">
+                <input type="checkbox" id="plctReverse" data-act="plct-toggle" data-on="SetReverseMode" data-off="SetForwardMode" ${reverse ? "checked" : ""} />
+                <span class="spx-plct-slider"></span>
+              </label>
             </div>
-            <div class="spx-plct-sub-body">
-              <div class="spx-plct-sys">
-                ${plcCheck("plctManual", zh ? "启动手动模式" : "Enable manual", "OpenEnableManual", "CloseEnableManual")}
-              </div>
-              <p class="spx-plct-manual-hint" id="popPlcManualHint">${zh ? "开启手动模式后，下方功能才可操作" : "Enable manual mode to use controls below"}</p>
-              <div class="spx-plct-manual-ops is-disabled" id="popPlcManualOps" aria-disabled="true">
-                <div class="spx-plct-sys">
-                  ${plcCheck("plctDc", zh ? "直流分边" : "DC edge", "OpenDCMotor", "CloseDCMotor")}
-                  ${plcCheck("plctWind", zh ? "卷标电机" : "Winding", "OpenWindingMotor", "CloseWindingMotor")}
-                  ${plcCheck("plctVac", zh ? "真空阀" : "Vacuum", "OpenVacuumValve", "CloseVacuumValve")}
-                  ${plcCheck("plctAir", zh ? "气缸" : "Cylinder", "OpenAirCylinder", "CloseAirCylinder")}
-                </div>
-                <div class="spx-plct-h">${zh ? "主电机" : "Main motor"}</div>
-                <div class="spx-plct-row">
-                  ${plcCmd(zh ? "前进" : "Fwd", "MainMotoradvance")}
-                  ${plcCmd(zh ? "后退" : "Back", "MainMotorBack")}
-                  ${plcCmd(zh ? "停止" : "Stop", "MainMotorStop", "danger")}
-                </div>
-                <div class="spx-plct-h">${zh ? "贴标 X / Z（按住）" : "Label X/Z (hold)"}</div>
-                <div class="spx-plct-row">
-                  ${plcHold(zh ? "X左" : "X←", "XLeftMove")}
-                  ${plcHold(zh ? "X右" : "X→", "XRightMove")}
-                  ${plcHold(zh ? "X停" : "X■", "XStop")}
-                  ${plcHold(zh ? "X原点" : "X0", "XBack")}
-                </div>
-                <div class="spx-plct-row">
-                  ${plcHold(zh ? "Z上" : "Z↑", "ZUp")}
-                  ${plcHold(zh ? "Z下" : "Z↓", "ZDown")}
-                  ${plcHold(zh ? "Z停" : "Z■", "ZStop")}
-                  ${plcHold(zh ? "Z原点" : "Z0", "ZBack")}
-                </div>
+          </div>
+        </div>
+      </section>`;
+
+    const labelPanel = isAdmin ? `
+      <section class="spx-plct-panel label">
+        <div class="spx-plct-heading">${zh ? "贴标测试" : "Labelling Test"}</div>
+        <div class="spx-plct-panel-body">
+          ${plcRoRow("lblX", zh ? "X坐标" : "X", fmtPlc(st.current_x, "int"))}
+          ${plcRoRow("lblY", zh ? "Y坐标" : "Y", fmtPlc(st.current_y, "int"))}
+          ${plcRoRow("lblZ", zh ? "Z坐标" : "Z", fmtPlc(st.current_z, "int"))}
+          ${plcParam("plctHalt", zh ? "预设停机坐标" : "Halt coordinate", fmtPlc(st.label_y, "int"), "", applyTxt)}
+          ${plcParam("plctLblX", zh ? "贴标X坐标" : "Labelling X", fmtPlc(st.label_x, "int"), "", applyTxt)}
+          <div class="spx-plct-form-row radio">
+            <span class="spx-plct-form-k">${zh ? "贴标完成状态" : "Finish state"}</span>
+            <div class="spx-plct-radio readonly" id="plctLabelFinish">
+              <label><input type="radio" name="plctLabelFinish" ${labelDone ? "" : "checked"} disabled /><span>${zh ? "未完成" : "Pending"}</span></label>
+              <label><input type="radio" name="plctLabelFinish" ${labelDone ? "checked" : ""} disabled /><span>${zh ? "完成" : "Done"}</span></label>
+            </div>
+          </div>
+          <div class="spx-plct-labelling-actions">
+            ${plcCmd(zh ? "贴标" : "Labelling", "Labelling", "ok")}
+            <button type="button" class="ghost-btn compact" data-act="plct-movex">${zh ? "移动 X" : "Move X"}</button>
+          </div>
+        </div>
+      </section>` : "";
+
+    const systemPanel = isAdmin ? `
+      <section class="spx-plct-panel system">
+        <div class="spx-plct-heading">${zh ? "系统参数" : "System Parameter"}</div>
+        <div class="spx-plct-panel-body system-body">
+          <div class="spx-plct-system-params">
+            ${plcParam("plctTenCoef", zh ? "张力系数" : "Tension coef", fmtPlc(st.tension_factor, 3), "", applyTxt)}
+            ${plcParam("plctUnreel", zh ? "进卷/放卷系数" : "Unreel/roll coef", fmtPlc(st.roll_unreel_factor, 3), "", applyTxt)}
+            ${plcParam("plctTenDiff", zh ? "叠布电机速度系数" : "Stack coef", fmtPlc(st.differential_tension, 3), "", applyTxt)}
+            ${plcParam("plctRollDiff", zh ? "收卷/摆布差速" : "Roll/plait diff", fmtPlc(st.differential_roll, 3), "[m/s]", applyTxt)}
+            ${plcParam("plctDrop", zh ? "贴标机下降高度" : "Drop height", fmtPlc(st.labelling_descent_height, 3), "[m/s]", applyTxt)}
+          </div>
+          <div class="spx-plct-system-switches">
+            ${plcSwitch("plctBuzzer", zh ? "蜂鸣器" : "Buzzer", "OpenBuzzer", "CloseBuzzer", false)}
+            ${plcSwitch("plctShield", zh ? "屏蔽检测" : "Shield detection", "OpenShieldDetection", "CloseShieldDetection", false)}
+          </div>
+        </div>
+      </section>` : "";
+
+    const ioSub = `
+      <div class="spx-plct-sub io" id="popPlcIo" hidden>
+        <div class="spx-plct-sub-mask" data-act="plct-io-close"></div>
+        <div class="spx-plct-sub-card io" role="dialog" aria-label="${zh ? "IO状态" : "IO State"}">
+          <div class="spx-plct-sub-head">
+            <span>${zh ? "IO状态" : "IO State"}</span>
+            <button type="button" class="ghost-btn compact" data-act="plct-io-close">×</button>
+          </div>
+          <div class="spx-plct-sub-body io">
+            <iframe id="popPlcIoFrame" title="${zh ? "IO状态" : "IO State"}" src="about:blank" data-src="/newviews/plcstatus?hideNavbar=1&amp;theme=spx&amp;lang=${encodeURIComponent(lang)}"></iframe>
+          </div>
+        </div>
+      </div>`;
+
+    const manualSub = isAdmin ? `
+      <div class="spx-plct-sub" id="popPlcManual" hidden>
+        <div class="spx-plct-sub-mask" data-act="plct-manual-close"></div>
+        <div class="spx-plct-sub-card manual" role="dialog" aria-label="${zh ? "手动调试" : "Manual"}">
+          <div class="spx-plct-sub-head">
+            <span>${zh ? "手动调试" : "Manual Debug"}</span>
+            <button type="button" class="ghost-btn compact" data-act="plct-manual-close">×</button>
+          </div>
+          <div class="spx-plct-sub-body">
+            ${plcCheck("plctManual", zh ? "启用手动" : "Enable manual", "OpenEnableManual", "CloseEnableManual")}
+            <p class="spx-plct-manual-hint" id="popPlcManualHint">${zh ? "开启手动模式后，下方功能才可操作" : "Enable manual mode to use controls below"}</p>
+            <div class="spx-plct-manual-ops is-disabled" id="popPlcManualOps" aria-disabled="true">
+              <div class="spx-plct-manual-board">
+                <section class="spx-plct-manual-group">
+                  <div class="spx-plct-h">${zh ? "输出控制" : "Output"}</div>
+                  <div class="spx-plct-manual-checks">
+                    ${plcCheck("plctDc", zh ? "直流分边电机" : "DC edge motor", "OpenDCMotor", "CloseDCMotor")}
+                    ${plcCheck("plctWind", zh ? "卷标电机" : "Winding motor", "OpenWindingMotor", "CloseWindingMotor")}
+                    ${plcCheck("plctVac", zh ? "真空阀" : "Vacuum", "OpenVacuumValve", "CloseVacuumValve")}
+                    ${plcCheck("plctAir", zh ? "气缸" : "Cylinder", "OpenAirCylinder", "CloseAirCylinder")}
+                  </div>
+                </section>
+                <section class="spx-plct-manual-group">
+                  <div class="spx-plct-h">${zh ? "贴标 X 轴" : "Label X"}</div>
+                  <div class="spx-plct-manual-grid">
+                    ${plcHold(zh ? "左移" : "Left", "XLeftMove")}
+                    ${plcHold(zh ? "右移" : "Right", "XRightMove")}
+                    ${plcHold(zh ? "停止" : "Stop", "XStop")}
+                    ${plcHold(zh ? "回原点" : "Home", "XBack")}
+                  </div>
+                </section>
+                <section class="spx-plct-manual-group">
+                  <div class="spx-plct-h">${zh ? "主电机" : "Main motor"}</div>
+                  <div class="spx-plct-manual-grid">
+                    ${plcCmd(zh ? "后退" : "Back", "MainMotorBack")}
+                    ${plcCmd(zh ? "前进" : "Forward", "MainMotoradvance")}
+                    ${plcCmd(zh ? "停止" : "Stop", "MainMotorStop", "danger")}
+                  </div>
+                </section>
+                <section class="spx-plct-manual-group">
+                  <div class="spx-plct-h">${zh ? "贴标 Z 轴" : "Label Z"}</div>
+                  <div class="spx-plct-manual-grid">
+                    ${plcHold(zh ? "上移" : "Up", "ZUp")}
+                    ${plcHold(zh ? "下移" : "Down", "ZDown")}
+                    ${plcHold(zh ? "停止" : "Stop", "ZStop")}
+                    ${plcHold(zh ? "回原点" : "Home", "ZBack")}
+                  </div>
+                </section>
               </div>
             </div>
           </div>
-        </div>`
-      : "";
+        </div>
+      </div>` : "";
 
-    const cmds = isAdmin
-      ? `<div class="spx-plct-cmds">
-          ${plcCmd(zh ? "启动" : "Start", "Start", "ok")}
-          ${plcCmd(zh ? "停止" : "Stop", "Stop", "danger")}
-          ${plcCmd(zh ? "复位" : "Reset", "Reset")}
-          ${plcCmd(zh ? "归零" : "Zero", "Zero")}
-          ${plcCmd(zh ? "急停" : "E-Stop", "EmergencyStop", "danger")}
-          ${plcCmd(zh ? "编码器归零" : "Enc0", "EncoderReset")}
-          <button type="button" class="ghost-btn compact" data-act="plct-manual-open">${zh ? "手动…" : "Manual…"}</button>
-        </div>`
+    const adminManualBtn = isAdmin
+      ? `<button type="button" class="ghost-btn compact tool" data-act="plct-manual-open">${zh ? "手动调试" : "Manual"}</button>`
       : "";
+    const rightBody = isAdmin
+      ? `<div class="spx-plct-col-right">
+            <div class="spx-plct-top-pair">${paramPanel}${labelPanel}</div>
+            ${systemPanel}
+          </div>`
+      : `<div class="spx-plct-col-right is-basic">${paramPanel}</div>`;
 
-    // 管理员：状态/参数/贴标/系统参数；手动走二级弹窗
-    const body = isAdmin
-      ? `<div class="spx-plct-body admin">${livePanel}${paramPanel}${labelPanel}${systemPanel}</div>`
-      : `<div class="spx-plct-body user">${livePanel}${paramPanel}</div>`;
+    const roleHint = isAdmin
+      ? (zh ? "管理员 · 可调系统参数与调试" : "Admin · system & debug")
+      : (zh ? "操作员 · 状态/基本参数/IO/归零" : "Operator · status, params, IO, zero");
 
     return `
-      <div class="spx-plctest${isAdmin ? " admin" : " user"}" id="popPlcTest">
-        <div class="spx-plct-tiles">
-          ${plcTile("length", zh ? "码长" : "Len", len)}
-          ${plcTile("speed", zh ? "速度" : "Spd", spd)}
-          ${plcTile("connect", zh ? "连接" : "Link", connected ? (zh ? "已连" : "ON") : (zh ? "未连" : "OFF"), !connected)}
-          ${plcTile("alarm", zh ? "报警" : "Alm", alarm, alarm !== (zh ? "无报警" : "OK"))}
-          ${plcTile("unwind", zh ? "放卷" : "Unw", unwind)}
-        </div>
-        ${cmds}
-        ${body}
-        <div class="spx-plct-msg muted" id="popPlcTestMsg">${
-          isAdmin
-            ? (zh ? "参数 ↵ 写入 · 手动点「手动…」打开" : "↵ write · Manual opens sub-dialog")
-            : (zh ? "参数点 ↵ 写入；状态自动刷新" : "↵ writes · status auto-refresh")
-        }</div>
+      <div class="spx-plctest classic ${isAdmin ? "is-admin" : "is-operator"}" id="popPlcTest" data-admin="${isAdmin ? "1" : "0"}">
+        <section class="spx-plct-head">
+          <div class="spx-plct-tiles">
+            ${plcTile("length", zh ? "码长" : "Length", len, "m")}
+            ${plcTile("speed", zh ? "速度" : "Speed", spd, "m/s")}
+            ${plcTile("connect", zh ? "连接" : "Link", connected ? (zh ? "已连接" : "ON") : (zh ? "未连接" : "OFF"), "", !connected)}
+            ${plcTile("alarm", zh ? "报警" : "Alarm", alarm, "", alarm !== (zh ? "无报警" : "OK"))}
+          </div>
+          <div class="spx-plct-actions">
+            <button type="button" class="ghost-btn compact tool" data-act="plct-io-open">${zh ? "IO状态" : "IO State"}</button>
+            ${adminManualBtn}
+            <div class="spx-plct-actions-spacer"></div>
+            ${plcCmd(zh ? "启动" : "Start", "Start", "ok")}
+            ${plcCmd(zh ? "停止" : "Stop", "Stop", "danger")}
+            ${plcCmd(zh ? "复位" : "Reset", "Reset")}
+            ${plcCmd(zh ? "归零" : "Zero", "Zero")}
+            ${plcCmd(zh ? "贴标机归零" : "Labeller Zero", "LabellerZero")}
+            ${plcCmd(zh ? "编码器复位" : "Encoder Zero", "EncoderReset")}
+            ${plcCmd(zh ? "急停" : "E-Stop", "EmergencyStop", "danger")}
+          </div>
+        </section>
+        <section class="spx-plct-body-row ${isAdmin ? "" : "is-basic"}">
+          <div class="spx-plct-col-live">${livePanel}</div>
+          ${rightBody}
+        </section>
+        <div class="spx-plct-msg muted" id="popPlcTestMsg">${roleHint} · ${zh ? "参数点「写入」生效" : "Apply writes"}</div>
+        ${ioSub}
         ${manualSub}
       </div>`;
   }
@@ -804,38 +963,40 @@
   function buildAlarm(ctx) {
     const zh = ctx.lang === "zh-CN";
     const list = Array.isArray(ctx.state.alarmList) ? ctx.state.alarmList : [];
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    const ts = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const typeLabel = (t) => {
+      const s = String(t || "");
+      if (s === "plc_warn") return zh ? "预警" : "Warn";
+      if (s === "label_alarm") return zh ? "贴标" : "Label";
+      if (s === "motor_alarm") return zh ? "电机" : "Motor";
+      if (s === "device_error" || s === "custom_alarm") return zh ? "设备" : "Device";
+      if (s === "plc_alarm" || s === "error") return zh ? "报警" : "Alarm";
+      return s || (zh ? "报警" : "Alarm");
+    };
     let rows;
     if (list.length) {
       rows = list.map((a) => [
-        (a.time || ts).toString().replace("T", " ").slice(0, 19),
-        a.code || a.title || "-",
-        a.msg || a.message || "-",
-      ]);
-    } else if (ctx.state.alarm > 0) {
-      rows = Array.from({ length: ctx.state.alarm }, (_, i) => [
-        ts,
-        `E${100 + i}`,
-        ctx.state.alarmMsg || (zh ? "演示报警" : "Demo alarm"),
+        typeLabel(a.type),
+        a.code || a.key || "-",
+        a.msg || a.message || a.title || "-",
       ]);
     } else {
       rows = [["-", "-", zh ? "当前无报警" : "No alarms"]];
     }
-    const live = ctx.state.alarmMsg
-      ? `<p class="spx-msg">${zh ? "当前" : "Now"}：${ctx.state.alarmMsg}</p>`
-      : "";
+    const live = list.length
+      ? `<p class="spx-msg">${zh ? "当前" : "Now"}（${list.length}）：${
+          ctx.state.alarmMsg || list.map((a) => a.msg).filter(Boolean).join(" · ")
+        }</p>`
+      : `<p class="spx-msg">${zh ? "当前无报警" : "No alarms"}</p>`;
     return `
       ${section(zh ? "报警列表" : "Alarms")}
       ${live}
       <table class="spx-table">
-        <thead><tr><th>${zh ? "时间" : "Time"}</th><th>${zh ? "代码" : "Code"}</th><th>${zh ? "信息" : "Message"}</th></tr></thead>
+        <thead><tr><th>${zh ? "类型" : "Type"}</th><th>${zh ? "代码" : "Code"}</th><th>${zh ? "信息" : "Message"}</th></tr></thead>
         <tbody>
           ${rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("")}
         </tbody>
       </table>
-      <div class="spx-actions">${ghostBtn(zh ? "清除" : "Clear", 'data-act="alarm-clear"')}</div>`;
+      <div class="spx-actions">${ghostBtn(zh ? "刷新" : "Refresh", 'data-act="alarm-refresh"')}</div>`;
   }
 
   function seriesPoints(history, xKey, yKey) {
@@ -1193,7 +1354,7 @@
                     <td>${Number(r.net).toFixed(1)}</td>
                     <td>${Number(r.lengthM).toFixed(1)} m</td>
                   </tr>`
-                : `<tr><td>${i + 1}</td><td colspan="4" style="color:rgba(240,240,250,0.35)">—</td></tr>`
+                : `<tr><td>${i + 1}</td><td colspan="4" style="color:rgba(201,208,220,0.35)">—</td></tr>`
             )
             .join("")}
         </tbody>
@@ -1230,6 +1391,11 @@
     const cat = global.SpxSettingsCatalog;
     const raw = (cat && cat.GROUPS) || global.SPX_SETTINGS_CATALOG || [];
     const merged = mergeSettingsValues(raw, (ctx && ctx.settingsValues) || {}, (ctx && ctx.lang) || "zh-CN");
+    const isAdmin = !!(ctx && ctx.about && ctx.about.isAdmin);
+    const opVisible =
+      typeof (cat && cat.isOperatorVisibleKey) === "function"
+        ? (key) => cat.isOperatorVisibleKey(key)
+        : (key) => ((cat && cat.OPERATOR_KEYS) || []).indexOf(String(key || "")) >= 0;
     const seen = {};
     return merged
       .map((g) => ({
@@ -1239,7 +1405,9 @@
         i18nKey: g.i18nKey,
         items: (g.items || []).filter((it) => {
           const key = String(it.key || "");
-          if (!key || key.charAt(0) === "_") return true;
+          if (!key) return false;
+          if (!isAdmin && !opVisible(key)) return false;
+          if (key.charAt(0) === "_") return true;
           if (seen[key]) return false;
           seen[key] = 1;
           return true;
@@ -1351,6 +1519,7 @@
 
   function buildSystemSettings(ctx) {
     const zh = ctx.lang === "zh-CN" || String(ctx.lang || "").indexOf("zh") === 0;
+    const isAdmin = !!(ctx && ctx.about && ctx.about.isAdmin);
     const catalog = settingsGroups(ctx);
     const prefer = ctx.settingsTabId || "";
     const activeId =
@@ -1368,15 +1537,20 @@
       )
       .join("");
     const panes = catalog.map((g) => buildSettingsPane(g, zh, g.id === activeId)).join("");
-    const hint = ctx.settingsLoaded
+    let hint = ctx.settingsLoaded
       ? zh
         ? "已读取高级设置，保存写回 /settings/advanced/set"
         : "Loaded from advanced settings"
       : zh
         ? "未读到后端参数，当前为目录默认值"
         : "Backend values unavailable; showing catalog defaults";
+    if (!isAdmin) {
+      hint = zh
+        ? "操作员模式：仅显示检测设置常用参数（对齐 bfsdetectionsetting）"
+        : "Operator mode: common detection settings only";
+    }
     return `
-      <div class="spx-settings">
+      <div class="spx-settings ${isAdmin ? "is-admin" : "is-operator"}">
         <aside class="spx-tabs" id="popSettingsTabs">${tabs}</aside>
         <div class="spx-tab-body">
           <p class="spx-msg" id="popSettingsMsg">${hint}</p>
@@ -1519,7 +1693,312 @@
       </div>`;
   }
 
-  /** DetectionRecords.cpp / DetectionRecords_ui.h — 筛选栏 + 表格 + 底部分页 */
+  /** 检验记录表头字段中文（对齐 debugsheet / InspectionListEntry） */
+  const RECORDS_FIELD_LABELS = {
+    ID: "编号",
+    IsFinished: "检验状态",
+    CheckID: "检验单号",
+    Conclusion: "结论",
+    ClothName: "布料名称",
+    Color: "颜色",
+    OrderSeries: "款号",
+    LotNumber: "缸号",
+    RollNumber: "匹号",
+    Specification: "规格",
+    Length: "长度",
+    Width: "门幅",
+    Customer: "客户",
+    Source: "来源",
+    StandardName: "标准名称",
+    DefectLibraryName: "疵点库",
+    Inspector: "检验员",
+    CreateTime: "创建时间",
+    StartTime: "开始时间",
+    FinishTime: "结束时间",
+    TotalCheckTime: "总检验时间",
+    FourPointsScore: "四分制",
+    Remarks: "备注",
+    Report: "查看报告",
+    PrintLabel: "打印",
+    ValidDefectCount: "有效疵点",
+    MissedDefectCount: "漏检数",
+    FalseDefectCount: "误检数",
+    DamagedDefectCount: "破损数",
+    ContinuityDefectCount: "连续疵点",
+    WidthAvgCm: "平均幅宽",
+    WidthMinCm: "最小幅宽",
+    WidthMaxCm: "最大幅宽",
+    WidthRangeCm: "幅宽极差",
+    NetWidthCm: "净幅宽",
+    ColorDiffMax: "最大色差",
+    ColorDiffAvg: "平均色差",
+    ColorDiffCount: "色差次数",
+    FabricBarCode: "布料条码",
+    GrossWeight: "毛重",
+    NetWeight: "净重",
+    PointsPer100SquareMetre: "百平方码扣分",
+    TotalPoints: "总扣分",
+  };
+
+  const RECORDS_FIXED_COL_COUNT = 4;
+  const RECORDS_DEFAULT_COLS = [
+    "InspectionSheets.ID",
+    "IsFinished",
+    "CheckID",
+    "Conclusion",
+    "ClothName",
+    "Color",
+    "OrderSeries",
+    "LotNumber",
+    "RollNumber",
+    "Specification",
+    "Length",
+    "Width",
+    "Customer",
+    "Source",
+    "InspectionSheets.StandardName",
+    "DefectLibraryName",
+    "InspectionSheets.Inspector",
+    "CreateTime",
+    "StartTime",
+    "FinishTime",
+    "TotalCheckTime",
+    "FourPointsScore",
+    "InspectionSheets.Remarks",
+  ];
+
+  function recordsColSuffix(columnName) {
+    const name = String(columnName || "").trim();
+    const dot = name.lastIndexOf(".");
+    return (dot >= 0 ? name.slice(dot + 1) : name).trim();
+  }
+
+  function recordsColLabel(columnName, zh) {
+    const suffix = recordsColSuffix(columnName);
+    if (!zh) return suffix || columnName;
+    return RECORDS_FIELD_LABELS[suffix] || suffix || columnName;
+  }
+
+  function recordsColSource(columnName) {
+    const lower = String(columnName || "").toLowerCase();
+    if (lower.indexOf("inspectionreports.") === 0) return "report";
+    if (lower.indexOf("inspectionsheets.") === 0) return "sheet";
+    const agg = {
+      validdefectcount: 1,
+      misseddefectcount: 1,
+      falsedefectcount: 1,
+      damageddefectcount: 1,
+      continuitydefectcount: 1,
+      widthavgcm: 1,
+      widthmincm: 1,
+      widthmaxcm: 1,
+      widthrangecm: 1,
+      widthbelowcount: 1,
+      netwidthcm: 1,
+      colordiffmax: 1,
+      colordiffavg: 1,
+      colordiffcount: 1,
+    };
+    if (agg[recordsColSuffix(columnName).toLowerCase()]) return "aggregate";
+    return "other";
+  }
+
+  function recordsColsMatch(a, b) {
+    return recordsColSuffix(a).toLowerCase() === recordsColSuffix(b).toLowerCase();
+  }
+
+  function recordsWidthClass(kind, suffix) {
+    const s = String(suffix || "").toLowerCase();
+    if (kind === "status") return "col-status";
+    if (kind === "report") return "col-report";
+    if (kind === "checkid") return "col-checkid";
+    if (kind === "print") return "col-print";
+    if (s === "id") return "col-id";
+    if (/(length|width|score|points|weight|count|ratio|time)$/i.test(s) || s.indexOf("width") >= 0)
+      return "col-num";
+    if (/(time|date)$/i.test(s)) return "col-date";
+    if (/(name|customer|remarks|source|specification|barcode)/i.test(s)) return "col-text";
+    return "col-mid";
+  }
+
+  /** 表格展示列：固定前四列（状态/报告/单号/打印）+ ui_records_cols 其余字段 */
+  function buildRecordsDisplayColumns(cols) {
+    const list = (Array.isArray(cols) && cols.length ? cols : RECORDS_DEFAULT_COLS)
+      .map((c) => String(c || "").trim())
+      .filter(Boolean);
+    const display = [
+      { kind: "status", key: "IsFinished", width: "col-status" },
+      { kind: "report", key: "Report", width: "col-report" },
+      { kind: "checkid", key: "CheckID", width: "col-checkid" },
+      { kind: "print", key: "PrintLabel", width: "col-print" },
+    ];
+    list.forEach((col) => {
+      const suffix = recordsColSuffix(col);
+      const low = suffix.toLowerCase();
+      if (!suffix || low === "id" || low === "isfinished" || low === "checkid") return;
+      display.push({
+        kind: "field",
+        key: suffix,
+        col: col,
+        width: recordsWidthClass("field", suffix),
+      });
+    });
+    return display;
+  }
+
+  function recordsFieldValue(row, key) {
+    if (!row) return "";
+    const k = String(key || "");
+    const low = k.toLowerCase();
+    if (low === "checkid") return row.checkId != null ? row.checkId : "";
+    if (low === "lotnumber") return row.lot != null ? row.lot : "";
+    if (low === "rollnumber") return row.roll != null ? row.roll : "";
+    if (low === "orderseries") return row.style != null ? row.style : "";
+    if (low === "color") return row.color != null ? row.color : "";
+    if (low === "clothname") return row.fabric != null ? row.fabric : "";
+    if (low === "length") {
+      const n = Number(row.lengthM);
+      return Number.isFinite(n) ? n.toFixed(1) : "";
+    }
+    if (low === "inspector") return row.inspector || "";
+    if (low === "conclusion") return row.conclusion || "";
+    if (low === "createtime" || low === "starttime") return row.createDate || "";
+    const fields = row.fields || {};
+    let v = fields[k];
+    if (v == null) v = fields[low];
+    if (v == null && row.raw) {
+      const raw = row.raw;
+      const hit = Object.keys(raw).find((rk) => recordsColSuffix(rk).toLowerCase() === low);
+      if (hit) v = raw[hit];
+    }
+    if (v == null || v === "") return "";
+    if (typeof v === "number" && Number.isFinite(v)) {
+      return Math.abs(v) >= 100 || Number.isInteger(v) ? String(v) : v.toFixed(2);
+    }
+    return String(v);
+  }
+
+  function buildRecordsColumnSettings(ctx, zh, rec) {
+    const selected = (Array.isArray(rec.draftCols) && rec.draftCols.length
+      ? rec.draftCols
+      : Array.isArray(rec.cols) && rec.cols.length
+        ? rec.cols
+        : RECORDS_DEFAULT_COLS
+    )
+      .map((c) => String(c || "").trim())
+      .filter(Boolean);
+    const available = (Array.isArray(rec.availableCols) && rec.availableCols.length
+      ? rec.availableCols
+      : selected.slice()
+    )
+      .map((c) => String(c || "").trim())
+      .filter(Boolean);
+    const q = String(rec.settingsQuery || "").trim().toLowerCase();
+    const activeIdx = rec.settingsActiveIdx != null ? Number(rec.settingsActiveIdx) : -1;
+
+    const selectedHtml = selected
+      .map((col, index) => {
+        const locked = index < RECORDS_FIXED_COL_COUNT;
+        const label = recordsColLabel(col, zh);
+        const suffix = recordsColSuffix(col);
+        const src = recordsColSource(col);
+        const active = index === activeIdx ? " active-selected" : "";
+        const lockedCls = locked ? " selected-locked" : "";
+        return `<button type="button" class="spx-rec-col-chip source-${src}${lockedCls}${active}"
+            data-act="rec-col-select" data-index="${index}" data-column="${escapeAttr(col)}"
+            title="${escapeAttr(locked ? (zh ? "前 4 列固定" : "Fixed") : col)}">
+            <span class="field-order">${index + 1}</span>
+            <span class="field-name">${escapeAttr(label)}</span>
+            <span class="field-key">${escapeAttr(suffix)}</span>
+            ${locked ? "" : `<span class="field-remove" data-act="rec-col-remove" data-index="${index}" title="${zh ? "移除" : "Remove"}">×</span>`}
+          </button>`;
+      })
+      .join("");
+
+    const availableHtml = available
+      .filter((col) => {
+        if (!q) return true;
+        const label = recordsColLabel(col, true).toLowerCase();
+        const suffix = recordsColSuffix(col).toLowerCase();
+        return label.indexOf(q) >= 0 || suffix.indexOf(q) >= 0 || String(col).toLowerCase().indexOf(q) >= 0;
+      })
+      .map((col) => {
+        const selectedAlready = selected.some((s) => recordsColsMatch(s, col));
+        const lockedSelected =
+          selectedAlready &&
+          selected.findIndex((s) => recordsColsMatch(s, col)) < RECORDS_FIXED_COL_COUNT;
+        const label = recordsColLabel(col, zh);
+        const suffix = recordsColSuffix(col);
+        const src = recordsColSource(col);
+        return `<label class="spx-rec-col-item source-${src}${selectedAlready ? " is-selected" : ""}"
+            data-act="rec-col-toggle" data-column="${escapeAttr(col)}">
+            <input type="checkbox" data-column="${escapeAttr(col)}"
+              ${selectedAlready ? "checked" : ""} ${lockedSelected ? "disabled" : ""} />
+            <span class="col-name">${escapeAttr(label)}</span>
+            <span class="col-key">${escapeAttr(suffix)}</span>
+          </label>`;
+      })
+      .join("") || `<div class="spx-muted">${zh ? "无匹配字段" : "No fields"}</div>`;
+
+    return `
+      <div class="spx-rec-settings-modal active" id="popRecSettings">
+        <div class="spx-rec-settings-mask" data-act="rec-col-close" title="${zh ? "关闭" : "Close"}"></div>
+        <div class="spx-rec-settings-card" role="dialog" aria-modal="true" aria-label="${zh ? "列显示设置" : "Column settings"}">
+          <div class="spx-rec-settings-head">
+            <div>
+              <div class="spx-rec-settings-title">${zh ? "列显示设置" : "Column settings"}</div>
+              <div class="spx-rec-settings-tip">${zh
+                ? "左侧勾选字段，右侧调整顺序。前 4 列（编号/状态/单号/结论）固定不可移除。"
+                : "Select on the left, reorder on the right. First 4 columns are fixed."}</div>
+            </div>
+            <button type="button" class="spx-rec-settings-x" data-act="rec-col-close" title="${zh ? "关闭" : "Close"}">&times;</button>
+          </div>
+          <div class="spx-rec-settings-actions">
+            <button type="button" class="ghost-btn compact" data-act="rec-col-top" ${activeIdx < RECORDS_FIXED_COL_COUNT ? "disabled" : ""}>${zh ? "置顶" : "Top"}</button>
+            <button type="button" class="ghost-btn compact" data-act="rec-col-up" ${activeIdx < RECORDS_FIXED_COL_COUNT ? "disabled" : ""}>${zh ? "上移" : "Up"}</button>
+            <button type="button" class="ghost-btn compact" data-act="rec-col-down" ${activeIdx < 0 || activeIdx >= selected.length - 1 || activeIdx < RECORDS_FIXED_COL_COUNT ? "disabled" : ""}>${zh ? "下移" : "Down"}</button>
+            <button type="button" class="ghost-btn compact" data-act="rec-col-bottom" ${activeIdx < RECORDS_FIXED_COL_COUNT ? "disabled" : ""}>${zh ? "置底" : "Bottom"}</button>
+            <span class="spx-records-sep"></span>
+            <button type="button" class="ghost-btn compact" data-act="rec-col-save">${zh ? "保存" : "Save"}</button>
+            <button type="button" class="ghost-btn compact" data-act="rec-col-close">${zh ? "取消" : "Cancel"}</button>
+          </div>
+          <div class="spx-rec-settings-body">
+            <div class="spx-rec-settings-panel">
+              <div class="spx-rec-settings-panel-h">
+                <span>${zh ? "可选字段" : "Available"}</span>
+                <input id="popRecColSearch" type="text" value="${escapeAttr(rec.settingsQuery || "")}"
+                  placeholder="${zh ? "搜索字段" : "Search"}" data-osk="1" data-act="rec-col-search" />
+              </div>
+              <div class="spx-rec-col-list" id="popRecColAvailable">${availableHtml}</div>
+            </div>
+            <div class="spx-rec-settings-panel">
+              <div class="spx-rec-settings-panel-h">
+                <span>${zh ? "已选顺序" : "Selected order"} <b>${selected.length}</b></span>
+              </div>
+              <div class="spx-rec-col-selected" id="popRecColSelected">${selectedHtml ||
+                `<div class="spx-muted">${zh ? "暂无已选字段" : "No columns"}</div>`}</div>
+            </div>
+          </div>
+          <p class="spx-msg" id="popRecColMsg"></p>
+        </div>
+      </div>`;
+  }
+
+  /** 按可视高度估算单页行数，使表格一页刚好铺满、无需纵向滚动 */
+  function calcRecordsPageSize(rec) {
+    const fixed = rec && Number(rec.pageSize);
+    if (Number.isFinite(fixed) && fixed >= 3) return Math.min(40, Math.floor(fixed));
+    let h = 720;
+    try {
+      if (typeof window !== "undefined" && window.innerHeight) h = window.innerHeight;
+    } catch (_) { /* ignore */ }
+    // 顶栏标题~48 + toolbar~58 + pager~44 + padding/gap~28 + thead~36
+    const avail = Math.max(160, h - 48 - 58 - 44 - 28 - 36);
+    const rowH = 38;
+    return Math.max(5, Math.min(30, Math.floor(avail / rowH)));
+  }
+
+  /** DetectionRecords.cpp — 筛选栏 + 库配置列 + 底部分页；设置按钮配置列选择/顺序 */
   function buildRecords(ctx) {
     const zh = ctx.lang === "zh-CN";
     const rec = (ctx.state && ctx.state.recordsUi) || {};
@@ -1527,8 +2006,11 @@
     const queryType = rec.queryType != null ? Number(rec.queryType) : 0;
     const queryValue = rec.queryValue != null ? String(rec.queryValue) : "";
     const page = Math.max(1, Number(rec.page) || 1);
-    const pageSize = 14;
+    const pageSize = calcRecordsPageSize(rec);
     const totalLen = Number(rec.totalLengthM != null ? rec.totalLengthM : (ctx.state && ctx.state.todayM) || 1260);
+    const cols = Array.isArray(rec.cols) && rec.cols.length ? rec.cols : RECORDS_DEFAULT_COLS;
+    const displayCols = buildRecordsDisplayColumns(cols);
+    const settingsOpen = !!rec.settingsOpen;
 
     const allRows = (ctx.recordRows && ctx.recordRows.length)
       ? ctx.recordRows
@@ -1560,6 +2042,16 @@
     const cur = Math.min(page, pages);
     const start = (cur - 1) * pageSize;
     const pageRows = filtered.slice(start, start + pageSize);
+    // 供 embed 按可视高度回写 pageSize 时钳制页码
+    try {
+      if (ctx.state && ctx.state.recordsUi) {
+        ctx.state.recordsUi._lastTotal = total;
+        ctx.state.recordsUi.page = cur;
+        if (!Number.isFinite(Number(ctx.state.recordsUi.pageSize)) || Number(ctx.state.recordsUi.pageSize) < 3) {
+          ctx.state.recordsUi.pageSize = pageSize;
+        }
+      }
+    } catch (_) { /* ignore */ }
 
     const tab = (id, label) =>
       `<button type="button" class="ghost-btn compact ${filter === id ? "active" : ""}" data-act="rec-filter" data-filter="${id}">${label}</button>`;
@@ -1579,36 +2071,54 @@
       .map(([v, lab]) => `<option value="${v}" ${queryType === v ? "selected" : ""}>${lab}</option>`)
       .join("");
 
+    const headCells = displayCols
+      .map((c) => {
+        let title = c.key;
+        if (c.kind === "status") title = zh ? "检验状态" : "Status";
+        else if (c.kind === "report") title = zh ? "查看报告" : "Report";
+        else if (c.kind === "checkid") title = zh ? "检验单号" : "Check ID";
+        else if (c.kind === "print") title = zh ? "打印" : "Print";
+        else title = recordsColLabel(c.col || c.key, zh);
+        return `<th class="${c.width}">${title}</th>`;
+      })
+      .join("");
+
     const bodyRows = pageRows
       .map((r) => {
-        const status = r.finished
-          ? `<span class="spx-rec-status ok">${zh ? "已检验" : "Done"}</span>`
-          : `<span class="spx-rec-status warn">${zh ? "未检验" : "Open"}</span>`;
-        const actionLabel = r.finished
-          ? (zh ? "查看报告" : "Report")
-          : (zh ? "检验此单" : "Inspect");
-        return `<tr data-rec-id="${r.id}">
-          <td class="mono">${r.id}</td>
-          <td>${status}</td>
-          <td><button type="button" class="ghost-btn compact" data-act="rec-order" data-id="${r.id}" data-finished="${r.finished ? 1 : 0}">${actionLabel}</button></td>
-          <td><button type="button" class="ghost-btn compact mono" data-act="rec-checkid" data-id="${r.id}">${r.checkId}</button></td>
-          <td><button type="button" class="ghost-btn compact" data-act="rec-print" data-id="${r.id}">${zh ? "打印" : "Print"}</button></td>
-          <td>${r.lot}</td>
-          <td>${r.roll}</td>
-          <td>${r.style}</td>
-          <td>${r.color}</td>
-          <td>${r.fabric}</td>
-          <td class="mono">${Number(r.lengthM).toFixed(1)}</td>
-          <td class="mono">${r.createDate}</td>
-          <td>${r.inspector || "—"}</td>
-          <td>${r.conclusion || "—"}</td>
-        </tr>`;
+        const cells = displayCols
+          .map((c) => {
+            if (c.kind === "status") {
+              const status = r.finished
+                ? `<span class="spx-rec-status ok">${zh ? "已检验" : "Done"}</span>`
+                : `<span class="spx-rec-status warn">${zh ? "未检验" : "Open"}</span>`;
+              return `<td class="${c.width}">${status}</td>`;
+            }
+            if (c.kind === "report") {
+              const actionLabel = r.finished
+                ? (zh ? "查看报告" : "Report")
+                : (zh ? "检验此单" : "Inspect");
+              return `<td class="${c.width}"><button type="button" class="ghost-btn compact" data-act="rec-order" data-id="${escapeAttr(r.id)}" data-checkid="${escapeAttr(r.checkId)}" data-finished="${r.finished ? 1 : 0}">${actionLabel}</button></td>`;
+            }
+            if (c.kind === "checkid") {
+              return `<td class="${c.width}"><button type="button" class="ghost-btn compact mono" data-act="rec-checkid" data-id="${escapeAttr(r.id)}" data-checkid="${escapeAttr(r.checkId)}">${escapeAttr(r.checkId)}</button></td>`;
+            }
+            if (c.kind === "print") {
+              return `<td class="${c.width}"><button type="button" class="ghost-btn compact" data-act="rec-print" data-id="${escapeAttr(r.id)}" data-checkid="${escapeAttr(r.checkId)}">${zh ? "打印" : "Print"}</button></td>`;
+            }
+            const text = recordsFieldValue(r, c.key);
+            const mono = c.width === "col-num" || c.width === "col-date" ? " mono" : "";
+            return `<td class="${c.width}${mono}" title="${escapeAttr(text)}">${escapeAttr(text || "—")}</td>`;
+          })
+          .join("");
+        return `<tr data-rec-id="${r.id}">${cells}</tr>`;
       })
       .join("") ||
-      `<tr><td colspan="14" class="spx-muted">${zh ? "无匹配记录" : "No matching records"}</td></tr>`;
+      `<tr><td colspan="${displayCols.length}" class="spx-muted">${zh ? "无匹配记录" : "No matching records"}</td></tr>`;
+
+    const minWidth = Math.max(720, 88 + 96 + 140 + 72 + Math.max(0, displayCols.length - 4) * 96);
 
     return `
-      <div class="spx-records">
+      <div class="spx-records${settingsOpen ? " is-settings" : ""}">
         <div class="spx-records-toolbar">
           <div class="spx-records-tabs">
             ${tab(0, zh ? "全部检验单" : "All")}
@@ -1616,34 +2126,20 @@
             ${tab(2, zh ? "未检验" : "Unfinished")}
             <button type="button" class="ghost-btn compact" data-act="rec-export">${zh ? "导出数据" : "Export"}</button>
             <button type="button" class="ghost-btn compact" data-act="rec-total-len">${zh ? "检验长度" : "Length"} ${totalLen.toFixed(0)} m</button>
+            <button type="button" class="ghost-btn compact${settingsOpen ? " active" : ""}" data-act="rec-settings" title="${zh ? "列设置" : "Columns"}">${zh ? "设置" : "Settings"}</button>
           </div>
           <div class="spx-records-query">
             <select id="popRecQueryType" class="spx-records-filter" aria-label="${zh ? "过滤项目" : "Filter"}">${queryOpts}</select>
             <input id="popRecQueryValue" type="text" value="${queryValue}" placeholder="${zh ? "查询内容" : "Query"}" data-osk="1" ${showValue ? "" : "hidden"} />
-            <input id="popRecDate" type="date" value="${rec.queryDate || "2026-11-19"}" ${showDate ? "" : "hidden"} />
-            <input id="popRecDate2" type="date" value="${rec.queryDate2 || "2026-11-20"}" ${showDate2 ? "" : "hidden"} />
+            <input id="popRecDate" type="date" value="${rec.queryDate || ""}" ${showDate ? "" : "hidden"} />
+            <input id="popRecDate2" type="date" value="${rec.queryDate2 || ""}" ${showDate2 ? "" : "hidden"} />
             <button type="button" class="ghost-btn compact" data-act="rec-search" title="${zh ? "搜索" : "Search"}">⌕</button>
           </div>
         </div>
         <div class="spx-records-table-wrap">
-          <table class="spx-table spx-records-table">
+          <table class="spx-table spx-records-table" style="min-width:${minWidth}px">
             <thead>
-              <tr>
-                <th>ID</th>
-                <th>${zh ? "状态" : "Status"}</th>
-                <th>${zh ? "查看报告" : "Report"}</th>
-                <th>${zh ? "检验单号" : "Check ID"}</th>
-                <th>${zh ? "打印" : "Print"}</th>
-                <th>${zh ? "缸号" : "Lot"}</th>
-                <th>${zh ? "匹号" : "Roll"}</th>
-                <th>${zh ? "款号" : "Style"}</th>
-                <th>${zh ? "颜色" : "Color"}</th>
-                <th>${zh ? "布料名称" : "Fabric"}</th>
-                <th>${zh ? "长度" : "Length"}</th>
-                <th>${zh ? "创建日期" : "Created"}</th>
-                <th>${zh ? "检验员" : "Inspector"}</th>
-                <th>${zh ? "结果" : "Result"}</th>
-              </tr>
+              <tr>${headCells}</tr>
             </thead>
             <tbody>${bodyRows}</tbody>
           </table>
@@ -1666,6 +2162,7 @@
             <button type="button" class="ghost-btn compact" data-act="rec-jump">${zh ? "跳转" : "Go"}</button>
           </div>
         </div>
+        ${settingsOpen ? buildRecordsColumnSettings(ctx, zh, rec) : ""}
       </div>`;
   }
 
@@ -1675,19 +2172,57 @@
     return Array.from({ length: 28 }, (_, i) => {
       const finished = i % 3 !== 2;
       const day = String(19 - (i % 10)).padStart(2, "0");
+      const checkId = `CK-202611${day}-${String(17 - (i % 17)).padStart(2, "0")}`;
+      const lot = `L-884${21 + (i % 5)}`;
+      const roll = `R-${17 - (i % 12)}`;
+      const style = `ST-${100 + (i % 7)}`;
+      const color = ["Navy", "Black", "Ivory", "Grey"][i % 4];
+      const lengthM = 88 + (i % 9) * 2.5;
+      const createDate = `2026-11-${day}`;
+      const conclusion = finished ? (i % 5 === 0 ? "NG" : "OK") : "";
+      const fields = {
+        ID: 1200 - i,
+        IsFinished: finished ? 1 : 0,
+        CheckID: checkId,
+        LotNumber: lot,
+        RollNumber: roll,
+        OrderSeries: style,
+        Color: color,
+        ClothName: fabric,
+        Length: lengthM,
+        CreateTime: createDate,
+        Inspector: inspector,
+        Conclusion: conclusion,
+        Specification: "45x45",
+        Width: 150 + (i % 5),
+        Customer: "Demo",
+        Source: "ERP",
+        StandardName: "4-Point",
+        DefectLibraryName: "Default",
+        StartTime: createDate,
+        FinishTime: finished ? createDate : "",
+        TotalCheckTime: finished ? 12 + (i % 7) : "",
+        FourPointsScore: finished ? 8 + (i % 6) : "",
+        Remarks: "",
+      };
+      Object.keys(fields).forEach((k) => {
+        fields[k.toLowerCase()] = fields[k];
+      });
       return {
         id: 1200 - i,
         finished,
-        checkId: `CK-202611${day}-${String(17 - (i % 17)).padStart(2, "0")}`,
-        lot: `L-884${21 + (i % 5)}`,
-        roll: `R-${17 - (i % 12)}`,
-        style: `ST-${100 + (i % 7)}`,
-        color: ["Navy", "Black", "Ivory", "Grey"][i % 4],
+        checkId,
+        lot,
+        roll,
+        style,
+        color,
         fabric,
-        lengthM: 88 + (i % 9) * 2.5,
-        createDate: `2026-11-${day}`,
+        lengthM,
+        createDate,
         inspector,
-        conclusion: finished ? (i % 5 === 0 ? "NG" : "OK") : "",
+        conclusion,
+        fields,
+        raw: fields,
       };
     });
   }
@@ -1700,11 +2235,11 @@
   }
 
   function defectStep(id, value) {
+    const v = Number(value) || 0;
     return `
       <div class="spx-def-step" data-step-id="${id}" data-min="0" data-max="9999" data-step="1">
-        <button type="button" class="mini-btn" data-act="def-step" data-target="${id}" data-delta="-1">−</button>
-        <input id="${id}" class="spx-def-val" type="number" min="0" max="9999" step="1" value="${value}" inputmode="numeric" />
-        <button type="button" class="mini-btn" data-act="def-step" data-target="${id}" data-delta="1">+</button>
+        <button type="button" class="spx-def-val-btn mono" data-act="def-step-edit" data-target="${id}" aria-haspopup="dialog">${v}</button>
+        <input id="${id}" class="spx-def-val" type="hidden" value="${v}" />
       </div>`;
   }
 
@@ -1743,11 +2278,12 @@
           { id: "demo3", name: "Denim 12oz" },
         ];
     const clothId = ui.clothId != null ? String(ui.clothId) : String(cloths[0].id);
-    const clothOpts = cloths
+    const clothTabs = cloths
       .map((c) => {
         const id = String(c.id);
-        const name = c.name === "__default__" ? (zh ? "默认方案" : "Default") : c.name;
-        return `<option value="${escapeAttr(id)}" ${id === clothId ? "selected" : ""}>${escapeAttr(name)}</option>`;
+        const name = c.name === "__default__" ? (zh ? "默认方案" : "Default") : String(c.name || id);
+        const active = id === clothId ? " active" : "";
+        return `<button type="button" class="spx-defect-cloth-tab${active}" data-act="defect-settings-cloth" data-cloth="${escapeAttr(id)}" title="${escapeAttr(name)}">${escapeAttr(name)}</button>`;
       })
       .join("");
     const emptyRow = !defs.length
@@ -1758,15 +2294,23 @@
       : "";
     return `
       <div class="spx-defect-panel">
-        <div class="spx-toolbar">
-          <label class="spx-field inline">
-            <span class="spx-k">${zh ? "布种" : "Cloth"}</span>
-            <select id="popDefectCloth" data-act="defect-settings-cloth">${clothOpts}</select>
-          </label>
+        <div class="spx-toolbar spx-defect-toolbar">
+          <div class="spx-defect-cloth-bar">
+            <div class="spx-defect-cloth-tabs" id="popDefectClothTabs" role="tablist" aria-label="${zh ? "布种" : "Cloth"}">
+              ${clothTabs || `<span class="spx-muted">${zh ? "暂无布种" : "No cloth"}</span>`}
+            </div>
+            <button type="button" class="ghost-btn compact spx-defect-cloth-add-btn" data-act="defect-settings-cloth-add" title="${zh ? "新增布料" : "Add cloth"}">+</button>
+            <input type="hidden" id="popDefectCloth" value="${escapeAttr(clothId)}" />
+          </div>
           <div class="spx-toolbar-actions">
             ${ghostBtn(zh ? "保存" : "Save", 'data-act="defect-settings-save"')}
             ${ghostBtn(zh ? "刷新" : "Refresh", 'data-act="defect-settings-refresh"')}
           </div>
+        </div>
+        <div class="spx-defect-cloth-add" id="popDefectClothAdd" hidden>
+          <input id="popDefectClothName" type="text" maxlength="64" placeholder="${zh ? "输入布料名称" : "Cloth name"}" data-osk="1" autocomplete="off" />
+          <button type="button" class="ghost-btn compact" data-act="defect-settings-cloth-add-ok">${zh ? "确定" : "OK"}</button>
+          <button type="button" class="ghost-btn compact" data-act="defect-settings-cloth-add-cancel">${zh ? "取消" : "Cancel"}</button>
         </div>
         ${loadingHint}
         <div class="spx-defect-scroll">
@@ -1805,6 +2349,11 @@
                   .join("")}
             </tbody>
           </table>
+        </div>
+        <div class="spx-def-step-editor" id="popDefStepEditor" hidden role="dialog" aria-label="${zh ? "大小调节" : "Size edit"}">
+          <button type="button" class="mini-btn" data-act="def-step-editor-delta" data-delta="-1" tabindex="-1">−</button>
+          <input id="popDefStepEditorVal" class="spx-def-val" type="number" min="0" max="9999" step="1" inputmode="numeric" data-osk="1" />
+          <button type="button" class="mini-btn" data-act="def-step-editor-delta" data-delta="1" tabindex="-1">+</button>
         </div>
       </div>`;
   }
@@ -2011,13 +2560,37 @@
   function selectedDefect(ctx) {
     const id = ctx.state && ctx.state.selectedId;
     const list = ctx.defects || [];
-    return list.find((d) => d.id === id) || null;
+    return list.find((d) => Number(d.id) === Number(id)) || null;
+  }
+
+  function gradeLetter(g) {
+    if (g === 1 || g === "1" || g === "I") return "I";
+    if (g === 2 || g === "2" || g === "II") return "II";
+    if (g === 3 || g === "3" || g === "III") return "III";
+    if (g === 4 || g === "4" || g === "IV") return "IV";
+    return "I";
   }
 
   function gradeOptions(selected) {
+    const sel = gradeLetter(selected);
     return ["I", "II", "III", "IV"]
-      .map((g) => `<option value="${g}" ${g === selected ? "selected" : ""}>${g}</option>`)
+      .map((g) => `<option value="${g}" ${g === sel ? "selected" : ""}>${g}</option>`)
       .join("");
+  }
+
+  function defectThumbSrc(ctx, d) {
+    const fromState = ctx.state && ctx.state.defectDetailImage;
+    if (fromState) return String(fromState);
+    if (!d) return "";
+    const b64 = d.localImgBase64 || "";
+    if (b64) {
+      return String(b64).indexOf("data:") === 0 ? String(b64) : "data:image/png;base64," + b64;
+    }
+    const path = d.defectImage || "";
+    if (path && global.SpxApi && typeof global.SpxApi.getEditDefectFileUrl === "function") {
+      return global.SpxApi.getEditDefectFileUrl(path);
+    }
+    return "";
   }
 
   function buildDefectDetail(ctx) {
@@ -2025,25 +2598,43 @@
     const d = selectedDefect(ctx);
     if (!d) {
       return `
-        ${section(zh ? "疵点详情" : "Detail")}
-        <p class="spx-msg">${zh ? "未选择疵点" : "No defect selected"}</p>
-        <div class="spx-actions">
-          ${ghostBtn(zh ? "关闭" : "Close", 'data-act="close"')}
+        <div class="spx-defect-detail">
+          ${section(zh ? "疵点详情" : "Detail")}
+          <p class="spx-msg">${zh ? "未选择疵点" : "No defect selected"}</p>
+          <div class="spx-actions">
+            ${ghostBtn(zh ? "关闭" : "Close", 'data-act="close"')}
+          </div>
         </div>`;
     }
-    const pts = ({ I: 1, II: 2, III: 3, IV: 4 })[d.grade] || 0;
+    const letter = gradeLetter(d.grade);
+    const pts = ({ I: 1, II: 2, III: 3, IV: 4 })[letter] || 0;
+    const yRaw = Number(d.y) || 0;
+    const yM = yRaw > 50 ? yRaw / 1000 : yRaw;
+    const xRaw = Number(d.x) || 0;
+    const xShow = xRaw <= 1.5 ? xRaw * 100 : xRaw;
+    const xUnit = xRaw <= 1.5 ? "%" : " mm";
+    const sizeMm = Number(
+      d.sizeMm != null ? d.sizeMm : Math.max(Number(d.width) || 0, Number(d.length) || 0)
+    );
+    const imgSrc = defectThumbSrc(ctx, d);
+    const thumb = imgSrc
+      ? `<div class="spx-defect-thumb has-img"><img src="${imgSrc}" alt="" /></div>`
+      : `<div class="spx-defect-thumb">${zh ? "暂无疵点图像" : "No defect image"}</div>`;
     return `
-      ${section(zh ? "预览" : "Preview")}
-      <div class="spx-defect-thumb">${zh ? "疵点图像" : "Defect Image"}</div>
-      ${section(zh ? "信息" : "Info")}
-      ${kv(zh ? "编号" : "ID", String(d.id))}
-      ${kv(zh ? "类型" : "Type", d.title)}
-      ${kv(zh ? "等级" : "Grade", `${d.grade}  ·  ${pts}${zh ? " 分" : " pts"}`)}
-      ${kv("Y", `${Number(d.y).toFixed(2)} m`)}
-      ${kv("X", `${(Number(d.x) * 100).toFixed(1)} %`)}
-      <div class="spx-actions split">
-        ${ghostBtn(zh ? "编辑" : "Edit", 'data-act="defect-detail-edit"')}
-        ${ghostBtn(zh ? "关闭" : "Close", 'data-act="close"')}
+      <div class="spx-defect-detail">
+        ${section(zh ? "预览" : "Preview")}
+        ${thumb}
+        ${section(zh ? "信息" : "Info")}
+        ${kv(zh ? "编号" : "ID", String(d.id))}
+        ${kv(zh ? "名称" : "Name", d.title || "-")}
+        ${kv(zh ? "级别" : "Grade", `${letter}  ·  ${pts}${zh ? " 分" : " pts"}`)}
+        ${kv(zh ? "大小" : "Size", `${sizeMm.toFixed(1)} mm`)}
+        ${kv(zh ? "Y坐标" : "Y", `${yM.toFixed(2)} m`)}
+        ${kv("X", `${xShow.toFixed(1)} ${xUnit}`)}
+        <div class="spx-actions split">
+          ${ghostBtn(zh ? "编辑" : "Edit", 'data-act="defect-detail-edit"')}
+          ${ghostBtn(zh ? "关闭" : "Close", 'data-act="close"')}
+        </div>
       </div>`;
   }
 
@@ -2069,68 +2660,97 @@
       </div>`;
   }
 
-  /** DefectAidedSelection.h — 辅助选择：主图+标尺+卡片流+右侧操作 */
+  /** DefectAidedSelection — 主图全幅 + DefectCard 风格卡片 */
   function buildDefectAidedSelection(ctx) {
     const zh = ctx.lang === "zh-CN";
-    const cards = (ctx.aidedDefects && ctx.aidedDefects.length)
-      ? ctx.aidedDefects
-      : [
-          { id: 1, title: zh ? "断经" : "Broken warp", x: 182, y: 1240, recommend: true, selected: true, grade: "II" },
-          { id: 2, title: zh ? "油污" : "Oil stain", x: 640, y: 1180, recommend: true, selected: true, grade: "I" },
-          { id: 3, title: zh ? "破洞" : "Hole", x: 910, y: 1310, recommend: false, selected: false, grade: "III" },
-          { id: 4, title: zh ? "纬斜" : "Skew", x: 420, y: 1260, recommend: true, selected: true, grade: "II" },
-          { id: 5, title: zh ? "色斑" : "Color spot", x: 1050, y: 1205, recommend: false, selected: false, grade: "I" },
-          { id: 6, title: zh ? "粗节" : "Slub", x: 260, y: 1340, recommend: true, selected: true, grade: "II" },
-        ];
+    const st = ctx.state || {};
+    const showAll = !!st.aidedShowAll;
+    const all = Array.isArray(ctx.aidedDefectsAll) ? ctx.aidedDefectsAll : (ctx.aidedDefects || []);
+    let cards = Array.isArray(ctx.aidedDefects)
+      ? ctx.aidedDefects.slice()
+      : (showAll ? all.slice() : all.filter((c) => !c.filtered));
+    // 展示前再按 X 排一次（多路线也不按 line）
+    if (cards.length > 1) {
+      cards.sort((a, b) => {
+        if (a.x !== b.x) return a.x - b.x;
+        return Number(a.id) - Number(b.id);
+      });
+    }
+    const totalAll = all.length;
+    const totalValid = all.filter((c) => !c.filtered).length;
     const total = cards.length;
     const selected = cards.filter((c) => c.selected).length;
     const page = 1;
     const pages = 1;
-    const marks = cards.map((c) => {
-      const left = Math.min(96, Math.max(4, (c.x / 1200) * 100));
-      const cls = c.selected ? "on" : "off";
-      return `<span class="spx-aided-mark ${cls}" style="left:${left}%" title="${c.title}"></span>`;
-    }).join("");
-    const cardsHtml = cards.map((c) => {
-      const sel = c.selected ? "selected" : "ignored";
-      const badge = c.recommend
-        ? `<span class="spx-aided-badge">${zh ? "推荐" : "Rec"}</span>`
-        : "";
-      return `
-        <article class="spx-aided-card ${sel}" data-aided-id="${c.id}">
-          <div class="spx-aided-thumb">${zh ? "局部图" : "Crop"}</div>
-          <div class="spx-aided-body">
-            <div class="spx-aided-row">
-              <button type="button" class="ghost-btn compact" data-act="aided-type" data-id="${c.id}">${c.title}</button>
-              ${badge}
-            </div>
-            <div class="spx-aided-coord">X ${c.x} · Y ${c.y} · ${c.grade}</div>
-            <div class="spx-aided-ops">
-              <button type="button" class="mini-btn ok" data-act="aided-select" data-id="${c.id}">${zh ? "选中" : "Select"}</button>
-              <button type="button" class="mini-btn danger" data-act="aided-ignore" data-id="${c.id}">${zh ? "忽略" : "Ignore"}</button>
-            </div>
+    const mainUrl = ctx.aidedMainImageUrl || "";
+    // 全图不画疵点框（选中/未选中都不显示）
+    const marks = "";
+    const mainImg = mainUrl
+      ? `<img class="spx-aided-main-img" src="${mainUrl}" alt=""/>`
+      : `<span class="spx-aided-main-hint">${zh ? "暂无全图" : "No frame"}</span>`;
+    // 对齐 DefectAidedSelection.h + DefectCard：选择：/推荐：文案与 268 卡布局
+    const cardsHtml = cards.length
+      ? cards.map((c) => {
+          const sel = c.selected ? "selected" : "ignored";
+          const statusText = c.selected ? c.title : (zh ? "忽略" : "Ignored");
+          const coordText = c.selected ? `(${c.x},${c.y})` : "";
+          const thumb = c.thumb
+            ? `<img class="spx-aided-thumb-img" src="${c.thumb}" alt=""/>`
+            : `<span class="spx-aided-thumb-ph">${zh ? "局部图" : "Crop"}</span>`;
+          const lineBadge = (c.line === 0 || c.line === 1)
+            ? `<span class="spx-aided-line line${c.line}">${zh ? `第${c.line + 1}路` : `L${c.line + 1}`}</span>`
+            : "";
+          const filterBadge = c.filtered
+            ? `<span class="spx-aided-badge filtered">${zh ? "过滤" : "F"}</span>`
+            : "";
+          return `
+        <article class="spx-aided-card ${sel}${c.filtered ? " filtered" : ""}" data-act="aided-toggle" data-id="${c.id}" data-aided-id="${c.id}" role="button" tabindex="0">
+          <div class="spx-aided-thumb">${thumb}${lineBadge}${filterBadge}</div>
+          <div class="spx-aided-selrow">
+            <span class="spx-aided-cap">${zh ? "选择：" : "Select:"}</span>
+            <span class="spx-aided-status">${statusText}</span>
+            <span class="spx-aided-coord">${coordText}</span>
+          </div>
+          <div class="spx-aided-typerow">
+            <span class="spx-aided-cap">${zh ? "推荐：" : "Rec:"}</span>
+            <button type="button" class="spx-aided-typechip" data-act="aided-type" data-id="${c.id}">${c.title}</button>
+            <span class="spx-aided-score">${c.grade || ""}</span>
           </div>
         </article>`;
-    }).join("");
+        }).join("")
+      : `<div class="spx-muted" style="padding:16px">${zh ? "当前无可见疵点" : "No visible defects"}</div>`;
+    const busy = !!(st.aidedBusy);
+    const confirmLabel = busy
+      ? (selected > 0 ? (zh ? "贴标中…" : "Labeling…") : (zh ? "处理中…" : "Working…"))
+      : (selected > 0 ? (zh ? "贴标" : "Label") : (zh ? "跳过" : "Skip"));
+    const confirmCls = selected > 0 ? "run-btn" : "run-btn running";
+    const dis = busy ? " disabled" : "";
+    const filterToggle = `
+            <div class="spx-aided-filter-toggle" role="group" aria-label="${zh ? "显示范围" : "Filter"}">
+              <button type="button" class="spx-aided-filter-btn${!showAll ? " active" : ""}" data-act="aided-show-valid"${dis}>${zh ? "有效" : "Valid"}</button>
+              <button type="button" class="spx-aided-filter-btn${showAll ? " active" : ""}" data-act="aided-show-all"${dis}>${zh ? "所有" : "All"}</button>
+            </div>`;
     return `
-      <div class="spx-aided">
+      <div class="spx-aided${busy ? " is-busy" : ""}">
         <div class="spx-aided-preview">
-          <div class="spx-aided-main">${marks}<span class="spx-aided-main-hint">${zh ? "停机主图预览" : "Stop frame"}</span></div>
+          <div class="spx-aided-main">${mainImg}${marks}</div>
           <div class="spx-aided-ruler"><span>0</span><span>300</span><span>600</span><span>900</span><span>1200 mm</span></div>
         </div>
         <div class="spx-aided-mainrow">
           <div class="spx-aided-cards" id="spxAidedCards">${cardsHtml}</div>
           <aside class="spx-aided-side">
-            <button type="button" class="run-btn running spx-aided-confirm" data-act="aided-confirm">${zh ? "继续" : "Continue"}</button>
-            <button type="button" class="ghost-btn" data-act="aided-select-all">${zh ? "全部选中" : "Select All"}</button>
-            <button type="button" class="ghost-btn" data-act="aided-ignore-all">${zh ? "全部忽略" : "Ignore All"}</button>
-            <button type="button" class="ghost-btn" data-act="aided-ignore-other">${zh ? "忽略其他" : "Ignore Other"}</button>
+            <button type="button" class="${confirmCls} spx-aided-confirm" data-act="aided-confirm"${dis}>${confirmLabel}</button>
+            ${filterToggle}
+            <button type="button" class="ghost-btn" data-act="aided-select-all"${dis}>${zh ? "全部选中" : "Select All"}</button>
+            <button type="button" class="ghost-btn danger" data-act="aided-ignore-all"${dis}>${zh ? "全部忽略" : "Ignore All"}</button>
+            <button type="button" class="ghost-btn danger" data-act="aided-ignore-other"${dis}>${zh ? "忽略其他" : "Ignore Other"}</button>
             <div class="spx-aided-info">
               <div class="spx-section">${zh ? "当前疵点信息" : "Batch Info"}</div>
-              ${kv(zh ? "共有缺陷" : "Defects", `${total} ${zh ? "个" : ""}`)}
-              ${kv(zh ? "已选中" : "Selected", `${selected}`)}
-              ${kv(zh ? "共有页面" : "Pages", `${pages} ${zh ? "页" : ""}`)}
-              ${kv(zh ? "当前页面" : "Page", `${page}`)}
+              <div class="spx-kv"><span class="spx-k">${zh ? "共有缺陷" : "Defects"}</span><span class="spx-v">${total}${zh ? " 个" : ""}</span></div>
+              <div class="spx-kv"><span class="spx-k">${zh ? "有效/全部" : "Valid/All"}</span><span class="spx-v">${totalValid}/${totalAll}</span></div>
+              <div class="spx-kv"><span class="spx-k">${zh ? "已选中" : "Selected"}</span><span class="spx-v">${selected}</span></div>
+              <div class="spx-kv"><span class="spx-k">${zh ? "共有页面" : "Pages"}</span><span class="spx-v">${pages}${zh ? " 页" : ""}</span></div>
+              <div class="spx-kv"><span class="spx-k">${zh ? "当前页面" : "Page"}</span><span class="spx-v">${page}${zh ? " 页" : ""}</span></div>
             </div>
             <div class="spx-aided-nav">
               <button type="button" class="ghost-btn compact" data-act="aided-prev">${zh ? "上一页" : "Prev"}</button>
@@ -2612,22 +3232,25 @@
   }
 
   function debugToolTabs(zh) {
-    // 设备硬件调试：嵌入 PublicServer views，hideNavbar=1 去掉调试顶栏
+    // 设备硬件调试：CustomUIV3/tuning SPX 页（构建拷贝到 /customuiv3/tuning/）
     return [
-      { id: "plc", label: zh ? "PLC" : "PLC", path: "/newviews/plctool" },
-      { id: "camera", label: zh ? "相机" : "Camera", path: "/views/debugcamera" },
-      { id: "light", label: zh ? "光源" : "Light", path: "/views/debuglight" },
-      { id: "printer", label: zh ? "打印机" : "Printer", path: "/views/debugprinter" },
-      { id: "color", label: zh ? "色差" : "Color", path: "/views/debugcolordiff" },
-      { id: "devices", label: zh ? "设备" : "Devices", path: "/views/debugdevices" },
-      { id: "alarms", label: zh ? "报警" : "Alarms", path: "/views/debugalarms" },
-      { id: "touchpad", label: zh ? "触摸板" : "Touchpad", path: "/views/debugtouchpad" },
-      { id: "label", label: zh ? "贴标" : "Label", path: "/views/debugticket" },
+      { id: "plc", label: zh ? "PLC" : "PLC", path: "/customuiv3/tuning/plc.html" },
+      { id: "alarms", label: zh ? "报警" : "Alarms", path: "/customuiv3/tuning/alarms.html" },
+      { id: "widthsensor", label: zh ? "幅宽传感器" : "Width Sensor", path: "/customuiv3/tuning/widthsensor.html" },
+      { id: "camera", label: zh ? "相机" : "Camera", path: "/customuiv3/tuning/camera.html" },
+      { id: "light3", label: zh ? "光源" : "Light3", path: "/customuiv3/tuning/light3.html" },
+      { id: "printer", label: zh ? "打印机" : "Printer", path: "/customuiv3/tuning/printer.html" },
+      { id: "touchpad", label: zh ? "触摸板" : "Touchpad", path: "/customuiv3/tuning/touchpad.html" },
+      { id: "lightband", label: zh ? "灯带" : "Light Band", path: "/customuiv3/tuning/lightband.html" },
+      { id: "nonstop", label: zh ? "不停机贴标" : "Nonstop Label", path: "/customuiv3/tuning/nonstop.html" },
+      { id: "label", label: zh ? "贴标" : "Label", path: "/customuiv3/tuning/label.html" },
+      { id: "colorreader", label: zh ? "取色仪" : "Color Reader", path: "/customuiv3/tuning/colorreader.html" },
+      { id: "devices", label: zh ? "设备信息" : "Devices", path: "/customuiv3/tuning/devices.html" },
     ];
   }
 
   function debugToolUrl(path, lang) {
-    const q = "hideNavbar=1&lang=" + encodeURIComponent(lang || "zh-CN");
+    const q = "lang=" + encodeURIComponent(lang || "zh-CN");
     const base = (global.SpxApi && global.SpxApi.base) || "";
     return base + path + (path.indexOf("?") >= 0 ? "&" : "?") + q;
   }
@@ -2660,6 +3283,117 @@
       </div>`;
   }
 
+  function wsSettingOn(sv, key, defOn) {
+    const raw = sv && sv[key] != null ? sv[key] : defOn ? "1" : "0";
+    return raw === true || raw === 1 || raw === "1" || String(raw).toLowerCase() === "true";
+  }
+
+  function wsSettingNum(sv, key, defVal) {
+    const n = Number(sv && sv[key] != null ? sv[key] : defVal);
+    return Number.isFinite(n) ? n : defVal;
+  }
+
+  function wsToggleRow(label, key, remark, on) {
+    const init = on ? "1" : "0";
+    return `<label class="spx-ws-toggle" title="${key}">
+      <span class="spx-ws-toggle-lab">${label}</span>
+      <span class="spx-switch" title="${on ? "On" : "Off"}">
+        <input type="checkbox" data-setting-key="${key}" data-setting-control="toggle" data-setting-init="${init}" data-remark="${remark || ""}" ${on ? "checked" : ""} />
+        <span class="spx-switch-track" aria-hidden="true"><span class="spx-switch-thumb"></span></span>
+      </span>
+    </label>`;
+  }
+
+  function wsStepField(label, key, remark, value, min, max, step) {
+    return `<div class="spx-ws-field" title="${key}" data-ws-step data-min="${min}" data-max="${max}" data-step="${step}">
+      <span class="spx-ws-field-lab">${label}</span>
+      <div class="spx-ws-step">
+        <button type="button" class="mini-btn" data-act="ws-step" data-delta="-1" aria-label="-">−</button>
+        <input type="number" min="${min}" max="${max}" step="${step}" value="${value}"
+          inputmode="numeric" data-osk="1"
+          data-setting-key="${key}" data-setting-control="number" data-setting-init="${value}" data-remark="${remark || ""}" />
+        <button type="button" class="mini-btn" data-act="ws-step" data-delta="1" aria-label="+">+</button>
+      </div>
+    </div>`;
+  }
+
+  function wsModeButtons(zh, mode) {
+    const opts = [
+      ["0", zh ? "固定" : "Fixed"],
+      ["1", "Canny"],
+      ["2", "KMeans"],
+      ["3", zh ? "卷积" : "Conv"],
+      ["4", "BLOB"],
+      ["5", zh ? "自适应" : "Adapt"],
+    ];
+    const btns = opts
+      .map(
+        ([v, lab]) =>
+          `<button type="button" class="spx-ws-mode-btn${String(v) === String(mode) ? " active" : ""}" data-act="ws-mode" data-v="${v}">${lab}</button>`
+      )
+      .join("");
+    return `<div class="spx-ws-field spx-ws-field-span" title="DetectEdgeMode">
+      <span class="spx-ws-field-lab">${zh ? "视觉检测方法" : "Vision edge mode"}</span>
+      <input type="hidden" data-setting-key="DetectEdgeMode" data-setting-control="select"
+        data-setting-init="${mode}" data-remark="视觉边缘检测模式" value="${mode}" id="wsDetectEdgeMode" />
+      <div class="spx-ws-modes" role="group">${btns}</div>
+    </div>`;
+  }
+
+  function buildWidthSensor(ctx) {
+    const zh = ctx.lang === "zh-CN" || String(ctx.lang || "").indexOf("zh") === 0;
+    const st = ctx.state || {};
+    const plc = st.plc || {};
+    const sv = ctx.settingsValues || {};
+    const fmt = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n.toFixed(1) : "—";
+    };
+    const fabric = st.widthCm != null ? st.widthCm : plc.fabric_width;
+    const plcW = plc.plc_fabric_width != null ? plc.plc_fabric_width : fabric;
+    const left = plc.width_sensor_left != null ? plc.width_sensor_left : st.widthSensorLeft;
+    const right = plc.width_sensor_right != null ? plc.width_sensor_right : st.widthSensorRight;
+    const visionOn = wsSettingOn(sv, "IsEnableImageWidth", false);
+    const followOn = wsSettingOn(sv, "IsEnableWidthDetectorEdge", false);
+    const showEdge = wsSettingOn(sv, "IsEnabledShowEdge", false);
+    const pinhole = wsSettingOn(sv, "IsEnabledPinhole", false);
+    const cropL = wsSettingNum(sv, "DistanceToLeftEdge", 0);
+    const cropR = wsSettingNum(sv, "DistanceToRightEdge", 0);
+    const mode = String(sv.DetectEdgeMode != null ? sv.DetectEdgeMode : "0");
+    const srcText = visionOn
+      ? zh ? "当前：视觉测量" : "Source: vision"
+      : zh ? "当前：幅宽传感器测量" : "Source: sensor";
+    return `
+      <div class="spx-ws">
+      ${section(zh ? "实时测量" : "Live Measure")}
+      <div class="spx-stat-row spx-ws-live" id="wsLiveRow">
+        <div class="spx-stat"><div class="spx-k">Fabric</div><div class="spx-v" id="wsLiveFabric">${fmt(fabric)}</div></div>
+        <div class="spx-stat"><div class="spx-k">PLC</div><div class="spx-v" id="wsLivePlc">${fmt(plcW)}</div></div>
+        <div class="spx-stat"><div class="spx-k">L</div><div class="spx-v" id="wsLiveLeft">${fmt(left)}</div></div>
+        <div class="spx-stat"><div class="spx-k">R</div><div class="spx-v" id="wsLiveRight">${fmt(right)}</div></div>
+      </div>
+      <p class="spx-msg spx-ws-src" id="wsLiveSource">${srcText}</p>
+      ${section(zh ? "开关" : "Switches")}
+      <div class="spx-ws-toggles">
+        ${wsToggleRow(zh ? "传感器跟随布边" : "Sensor follow", "IsEnableWidthDetectorEdge", zh ? "幅宽检测器边缘检测" : "Width detector edge", followOn)}
+        ${wsToggleRow(zh ? "视觉幅宽测量" : "Vision measure", "IsEnableImageWidth", zh ? "视觉幅宽检测" : "Image width", visionOn)}
+        ${wsToggleRow(zh ? "显示边距线" : "Show edge marks", "IsEnabledShowEdge", zh ? "是否开启在图片中显示左右边距标记线" : "Show edge marks", showEdge)}
+        ${wsToggleRow(zh ? "双针孔布边" : "Pinhole edge", "IsEnabledPinhole", zh ? "双针孔布边检测" : "Pinhole edge", pinhole)}
+      </div>
+      ${section(zh ? "边距设置" : "Margins")}
+      <div class="spx-ws-fields">
+        ${wsStepField(zh ? "左边距 mm" : "Left mm", "DistanceToLeftEdge", "左边距(mm)", cropL, 0, 450, 1)}
+        ${wsStepField(zh ? "右边距 mm" : "Right mm", "DistanceToRightEdge", "右边距(mm)", cropR, 0, 450, 1)}
+        ${wsModeButtons(zh, mode)}
+      </div>
+      <div class="spx-actions spx-ws-actions">
+        ${ghostBtn(zh ? "保存" : "Save", 'data-act="widthsensor-save"')}
+        ${ghostBtn(zh ? "刷新数值" : "Refresh", 'data-act="widthsensor-refresh"')}
+      </div>
+      <p class="spx-msg" id="wsSaveMsg"></p>
+      </div>`;
+  }
+
   function buildBody(key, ctx) {
     switch (key) {
       case "login":
@@ -2676,7 +3410,10 @@
         return buildLight(ctx);
       case "alarm":
         return buildAlarm(ctx);
+      case "widthSensor":
+        return buildWidthSensor(ctx);
       case "unwind":
+        // web/popups/unwind.html → SPX 风格 plctest 布局（buildPlcTest）
         return buildPlcTest(ctx);
       case "speed":
       case "width":
@@ -2740,6 +3477,12 @@
           ctx,
           "请先停止验布，再测量净幅宽",
           "Stop the machine before measuring net width"
+        );
+      case "editNeedStop":
+        return buildNetWidthHint(
+          ctx,
+          "请先停止验布，再编辑疵点",
+          "Stop the machine before editing defects"
         );
       case "colordiffalarm":
         return buildColorDiffAlarm(ctx);
@@ -2906,23 +3649,65 @@
 
   SpxOsk.prototype._rowsAlpha = function () {
     const up = this._letterUpper();
-    const map = (arr) => arr.map((c) => (up ? c.toUpperCase() : c.toLowerCase()));
+    const sh = !!this.shift;
+    const L = (c) => (up ? c.toUpperCase() : c.toLowerCase());
+    const S = (base, shifted) => (sh ? shifted : base);
+    // 标准 QWERTY（含行缩进，对齐物理键盘）
     return [
-      [...map(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]), "back"],
-      map(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]),
-      map(["a", "s", "d", "f", "g", "h", "j", "k", "l"]),
-      ["caps", "shift", ...map(["z", "x", "c", "v", "b", "n", "m"]), "clear"],
-      ["tab", "123", "space", "-", "_", ".", "@", "enter", "done"],
+      {
+        keys: [
+          S("1", "!"),
+          S("2", "@"),
+          S("3", "#"),
+          S("4", "$"),
+          S("5", "%"),
+          S("6", "^"),
+          S("7", "&"),
+          S("8", "*"),
+          S("9", "("),
+          S("0", ")"),
+          S("-", "_"),
+          S("=", "+"),
+          "back",
+        ],
+      },
+      {
+        keys: [L("q"), L("w"), L("e"), L("r"), L("t"), L("y"), L("u"), L("i"), L("o"), L("p"), S("[", "{"), S("]", "}")],
+        lead: 1,
+      },
+      {
+        keys: [L("a"), L("s"), L("d"), L("f"), L("g"), L("h"), L("j"), L("k"), L("l"), S(";", ":"), S("'", '"')],
+        lead: 2,
+        trail: 1,
+      },
+      {
+        keys: [
+          "shift",
+          L("z"),
+          L("x"),
+          L("c"),
+          L("v"),
+          L("b"),
+          L("n"),
+          L("m"),
+          S(",", "<"),
+          S(".", ">"),
+          S("/", "?"),
+          "clear",
+        ],
+      },
+      { keys: ["123", "caps", "space", "enter", "done"] },
     ];
   };
 
   SpxOsk.prototype._rowsNum = function () {
-    // 紧凑 4×4 计算器小键盘
+    // 九宫格小键盘（计算器序）
     return [
-      ["7", "8", "9", "back"],
-      ["4", "5", "6", "clear"],
-      ["1", "2", "3", "abc"],
-      ["-", "0", ".", "done"],
+      { keys: ["7", "8", "9"] },
+      { keys: ["4", "5", "6"] },
+      { keys: ["1", "2", "3"] },
+      { keys: ["-", "0", "."] },
+      { keys: ["abc", "back", "clear", "done"] },
     ];
   };
 
@@ -2960,16 +3745,23 @@
     const rows = num ? this._rowsNum() : this._rowsAlpha();
     this.root.classList.toggle("is-num", num);
     this.inner.classList.toggle("is-num", num);
-    // 关闭键放在 root 右上角（不挤在键盘行内）
+    // 关闭键：按键区外侧右上角（绝对定位，不进按键行）
     let toolbar = this.root.querySelector(".spx-osk-toolbar");
     if (!toolbar) {
       toolbar = document.createElement("div");
       toolbar.className = "spx-osk-toolbar";
-      this.root.insertBefore(toolbar, this.inner);
+      this.root.appendChild(toolbar);
     }
     toolbar.innerHTML = this._keyHtml("close");
     this.inner.innerHTML = rows
-      .map((row) => `<div class="spx-osk-row">${row.map((k) => this._keyHtml(k)).join("")}</div>`)
+      .map((row) => {
+        const keys = Array.isArray(row) ? row : row.keys || [];
+        const lead = row && row.lead ? Number(row.lead) : 0;
+        const trail = row && row.trail ? Number(row.trail) : 0;
+        const leadHtml = lead > 0 ? `<span class="spx-osk-spacer" style="flex:${lead * 0.35}"></span>` : "";
+        const trailHtml = trail > 0 ? `<span class="spx-osk-spacer" style="flex:${trail * 0.35}"></span>` : "";
+        return `<div class="spx-osk-row">${leadHtml}${keys.map((k) => this._keyHtml(k)).join("")}${trailHtml}</div>`;
+      })
       .join("");
   };
 
@@ -3075,7 +3867,21 @@
       return;
     }
     this._insert(k);
-    if (this.mode === "alpha" && this.shift && k.length === 1 && /[A-Za-z]/.test(k)) {
+    // Shift 单击：输入字母/上档符号后自动弹起
+    const actions = new Set([
+      "caps",
+      "shift",
+      "back",
+      "clear",
+      "123",
+      "abc",
+      "space",
+      "close",
+      "tab",
+      "enter",
+      "done",
+    ]);
+    if (this.mode === "alpha" && this.shift && !actions.has(k)) {
       this.shift = false;
       this._render();
     }
@@ -3090,6 +3896,7 @@
     this._placeTrigger = null;
     this.settingsTabId = null; // 系统设置当前 tab，切换弹窗后恢复
     this.debugTabId = null; // 硬件调试当前 tab
+    this._defStepEditId = ""; // 疵点设置：当前弹出编辑的尺寸字段 id
 
     this.root = el("div", "spx-popup-root");
     this.root.hidden = true;
@@ -3118,13 +3925,118 @@
     this.bodyEl.addEventListener("focusin", (e) => this._onFocusIn(e));
     this.bodyEl.addEventListener("focusout", (e) => this._onFocusOut(e));
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && this.activeKey) this.close();
+      if (!this.activeKey) return;
+      if (this._defStepEditId && (e.key === "Escape" || e.key === "Enter")) {
+        this._closeDefStepEditor();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      const clothAdd = this.bodyEl && this.bodyEl.querySelector("#popDefectClothAdd");
+      const clothAddOpen = !!(clothAdd && !clothAdd.hidden);
+      if (clothAddOpen && e.key === "Escape") {
+        clothAdd.hidden = true;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      if (
+        clothAddOpen &&
+        e.key === "Enter" &&
+        e.target &&
+        e.target.id === "popDefectClothName"
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        this._actEl = e.target;
+        this.onAction("defect-settings-cloth-add-ok", this.activeKey, this);
+        return;
+      }
+      if (e.key === "Escape") this.close();
     });
   }
 
+  SpxPopupHost.prototype._closeDefStepEditor = function () {
+    if (this._defStepScrollEl && this._defStepScrollHandler) {
+      try {
+        this._defStepScrollEl.removeEventListener("scroll", this._defStepScrollHandler);
+      } catch (_) { /* ignore */ }
+    }
+    this._defStepScrollEl = null;
+    this._defStepScrollHandler = null;
+    this._commitDefStepEditor();
+    const editor = this.bodyEl && this.bodyEl.querySelector("#popDefStepEditor");
+    if (editor) editor.hidden = true;
+    if (this.bodyEl) {
+      this.bodyEl.querySelectorAll(".spx-def-val-btn.is-editing").forEach((b) => b.classList.remove("is-editing"));
+    }
+    this._defStepEditId = "";
+  };
+
+  SpxPopupHost.prototype._commitDefStepEditor = function () {
+    const id = this._defStepEditId;
+    if (!id || !this.bodyEl) return;
+    const editorInp = this.bodyEl.querySelector("#popDefStepEditorVal");
+    const wrap = this.bodyEl.querySelector(`.spx-def-step[data-step-id="${id}"]`);
+    const hidden = this.bodyEl.querySelector(`#${id}`);
+    const btn = wrap && wrap.querySelector(".spx-def-val-btn");
+    if (!editorInp || !hidden) return;
+    const min = Number((wrap && wrap.getAttribute("data-min")) || 0) || 0;
+    const max = Number((wrap && wrap.getAttribute("data-max")) || 9999) || 9999;
+    let v = Number(editorInp.value);
+    if (!Number.isFinite(v)) v = Number(hidden.value) || 0;
+    v = Math.min(max, Math.max(min, Math.round(v)));
+    hidden.value = String(v);
+    if (btn) btn.textContent = String(v);
+    editorInp.value = String(v);
+  };
+
+  SpxPopupHost.prototype._openDefStepEditor = function (targetId, anchorEl) {
+    if (!this.bodyEl || !targetId || !anchorEl) return;
+    if (this._defStepEditId && this._defStepEditId !== targetId) this._closeDefStepEditor();
+    const panel = this.bodyEl.querySelector(".spx-defect-panel");
+    const editor = this.bodyEl.querySelector("#popDefStepEditor");
+    const editorInp = this.bodyEl.querySelector("#popDefStepEditorVal");
+    const wrap = this.bodyEl.querySelector(`.spx-def-step[data-step-id="${targetId}"]`);
+    const hidden = this.bodyEl.querySelector(`#${targetId}`);
+    if (!panel || !editor || !editorInp || !hidden) return;
+
+    this.bodyEl.querySelectorAll(".spx-def-val-btn.is-editing").forEach((b) => b.classList.remove("is-editing"));
+    anchorEl.classList.add("is-editing");
+    this._defStepEditId = targetId;
+    editorInp.value = String(Number(hidden.value) || 0);
+    editor.hidden = false;
+
+    // 先显示再量尺寸，锚点下方居中；溢出时钳到面板内
+    const pr = panel.getBoundingClientRect();
+    const ar = anchorEl.getBoundingClientRect();
+    const ew = editor.offsetWidth || 120;
+    const eh = editor.offsetHeight || 40;
+    let left = ar.left - pr.left + (ar.width - ew) / 2;
+    let top = ar.bottom - pr.top + 6;
+    left = Math.max(4, Math.min(left, Math.max(4, pr.width - ew - 4)));
+    if (top + eh > pr.height - 4) top = Math.max(4, ar.top - pr.top - eh - 6);
+    editor.style.left = `${Math.round(left)}px`;
+    editor.style.top = `${Math.round(top)}px`;
+
+    const scroll = panel.querySelector(".spx-defect-scroll");
+    if (scroll) {
+      this._defStepScrollEl = scroll;
+      this._defStepScrollHandler = () => this._closeDefStepEditor();
+      scroll.addEventListener("scroll", this._defStepScrollHandler, { passive: true });
+    }
+
+    requestAnimationFrame(() => {
+      try {
+        editorInp.focus({ preventScroll: true });
+        editorInp.select();
+      } catch (_) { /* ignore */ }
+    });
+  };
+
   SpxPopupHost.prototype.modeFor = function (key) {
-    if (INFO_KEYS.has(key)) return "info";
     if (FORM_KEYS.has(key)) return "form";
+    if (SHEET_EDITOR_KEYS.has(key)) return "info";
     if (LEFT_KEYS.has(key)) return "left";
     return CENTER_KEYS.has(key) ? "center" : "quick";
   };
@@ -3134,6 +4046,7 @@
   };
 
   SpxPopupHost.prototype.close = function () {
+    if (this._defStepEditId) this._closeDefStepEditor();
     if (this.osk) this.osk.hide();
     this._disposeTool();
     this.activeKey = null;
@@ -3142,7 +4055,7 @@
     this._placeTrigger = null;
     this.root.hidden = true;
     this.root.classList.remove("modeless");
-    this.shell.classList.remove("center", "quick", "info", "form", "left", "tool");
+    this.shell.classList.remove("center", "quick", "info", "form", "left", "tool", "login", "osk-lift");
   };
 
   SpxPopupHost.prototype._disposeTool = function () {
@@ -3168,133 +4081,427 @@
     const coord = this.bodyEl.querySelector("#spxArtCoord");
     const status = this.bodyEl.querySelector("#spxArtStatus");
     const zoomLab = this.bodyEl.querySelector("#spxArtZoom");
+    const loadingEl = this.bodyEl.querySelector("#spxArtLoading");
+    const previewThumb = this.bodyEl.querySelector("#spxArtPreviewThumb");
+    const padBadge = this.bodyEl.querySelector("#spxArtPad");
     if (!canvas) return;
     const ctx2 = canvas.getContext("2d");
     const host = this;
     let zoom = 1;
     let dragging = false;
-    let start = null;
-    let draft = null;
+    let startImg = null;
+    let draftImg = null;
     let pan = { x: 0, y: 0 };
+    let tiles = [];
+    let imgNaturalWidth = 0;
+    let imgNaturalHeight = 0;
+    let simulated = true;
+    let loadGen = 0;
+    let viewW = 1;
+    let viewH = 1;
 
     const getState = () => {
-      const c = host.getCtx();
+      const c = host.getCtx() || {};
       return c.state || {};
     };
     const roisOf = () => (getState().artificalRois || []).slice();
     const modeOf = () => getState().artificalMode || "rect";
+    const zh = () => ((host.getCtx() && host.getCtx().lang) || "").startsWith("zh");
+    const boardOf = () => getState().artificalBoard || {};
 
-    function resize() {
-      const box = canvas.parentElement.getBoundingClientRect();
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      canvas.width = Math.max(1, Math.floor(box.width * dpr));
-      canvas.height = Math.max(1, Math.floor(box.height * dpr));
-      canvas.style.width = `${box.width}px`;
-      canvas.style.height = `${box.height}px`;
-      draw();
+    function setLoading(on, text) {
+      if (!loadingEl) return;
+      loadingEl.hidden = !on;
+      if (text) {
+        const lab = loadingEl.querySelector("span");
+        if (lab) lab.textContent = text;
+      }
     }
 
-    function toLocal(e) {
+    function fitScale() {
+      if (imgNaturalWidth <= 0 || imgNaturalHeight <= 0) return 1;
+      return Math.min(viewW / imgNaturalWidth, viewH / imgNaturalHeight) * 0.96;
+    }
+
+    function worldScale() {
+      return fitScale() * zoom;
+    }
+
+    function imgToCanvas(ix, iy) {
+      const s = worldScale();
+      const ox = (viewW - imgNaturalWidth * s) / 2 + pan.x;
+      const oy = (viewH - imgNaturalHeight * s) / 2 + pan.y;
+      return { x: ox + ix * s, y: oy + iy * s };
+    }
+
+    function canvasToImg(cx, cy) {
+      const s = worldScale();
+      const ox = (viewW - imgNaturalWidth * s) / 2 + pan.x;
+      const oy = (viewH - imgNaturalHeight * s) / 2 + pan.y;
+      return { x: (cx - ox) / s, y: (cy - oy) / s };
+    }
+
+    function toCanvasLocal(e) {
       const r = canvas.getBoundingClientRect();
       return {
-        x: ((e.clientX - r.left) / r.width) * canvas.width,
-        y: ((e.clientY - r.top) / r.height) * canvas.height,
+        x: ((e.clientX - r.left) / Math.max(1, r.width)) * viewW,
+        y: ((e.clientY - r.top) / Math.max(1, r.height)) * viewH,
       };
     }
 
-    function drawFabric(g, w, h) {
+    function decodeBlob(blob) {
+      return new Promise((resolve, reject) => {
+        if (typeof createImageBitmap === "function") {
+          createImageBitmap(blob).then(resolve, reject);
+          return;
+        }
+        const im = new Image();
+        const url = URL.createObjectURL(blob);
+        im.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(im);
+        };
+        im.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("decode"));
+        };
+        im.src = url;
+      });
+    }
+
+    function releaseTiles(list) {
+      (list || []).forEach((t) => {
+        if (t && t.drawable && typeof t.drawable.close === "function") {
+          try { t.drawable.close(); } catch (_) { /* ignore */ }
+        }
+      });
+    }
+
+    function useSimulatedBoard() {
+      const cached = host._artImageCache && host._artImageCache.tiles;
+      if (tiles && tiles !== cached) releaseTiles(tiles);
+      tiles = [];
+      const board = boardOf();
+      imgNaturalWidth = Math.max(800, Number(board.imageWidth) || Number(board.fabricWidth) || 1600);
+      imgNaturalHeight = Math.max(600, Math.round(imgNaturalWidth * 0.55));
+      simulated = true;
+      if (padBadge) {
+        padBadge.hidden = false;
+        padBadge.textContent = zh() ? "预览模拟" : "sim";
+      }
+      if (status) status.textContent = zh() ? "无拼图，使用模拟画布" : "No tiles — simulated board";
+    }
+
+    function cacheKey(board) {
+      const imgs = Array.isArray(board.tiles) ? board.tiles : [];
+      return [
+        board.imagePath || "",
+        getState().artificalImgType != null ? getState().artificalImgType : 0,
+        imgs.map((t) => t && t.url).join("|"),
+        board.tileCount || imgs.length,
+      ].join("::");
+    }
+
+    async function loadBoardImage() {
+      const board = boardOf();
+      const metaTiles = Array.isArray(board.tiles) ? board.tiles : [];
+      const key = cacheKey(board);
+      if (host._artImageCache && host._artImageCache.key === key && host._artImageCache.tiles) {
+        tiles = host._artImageCache.tiles;
+        imgNaturalWidth = host._artImageCache.w;
+        imgNaturalHeight = host._artImageCache.h;
+        simulated = !!host._artImageCache.simulated;
+        setLoading(false);
+        draw();
+        updateRoiPreview();
+        return;
+      }
+      if (!metaTiles.length || board.simulated || !global.SpxApi || typeof global.SpxApi.getAddDefectFileUrl !== "function") {
+        useSimulatedBoard();
+        setLoading(false);
+        draw();
+        updateRoiPreview();
+        return;
+      }
+      const gen = ++loadGen;
+      setLoading(true, zh() ? "图像正在加载..." : "Loading image...");
+      try {
+        let accY = 0;
+        const loaded = [];
+        for (const img of metaTiles) {
+          if (gen !== loadGen) return;
+          const url = global.SpxApi.getAddDefectFileUrl(img.url);
+          const res = await fetch(url, { credentials: "same-origin" });
+          if (!res.ok) throw new Error("tile HTTP " + res.status);
+          const drawable = await decodeBlob(await res.blob());
+          loaded.push({
+            drawable: drawable,
+            yStart: accY,
+            w: Number(img.w) || drawable.width || 0,
+            h: Number(img.h) || drawable.height || 0,
+          });
+          accY += Number(img.h) || drawable.height || 0;
+        }
+        if (gen !== loadGen) {
+          releaseTiles(loaded);
+          return;
+        }
+        const prevCached = host._artImageCache && host._artImageCache.tiles;
+        if (tiles && tiles !== prevCached) releaseTiles(tiles);
+        tiles = loaded;
+        imgNaturalWidth = Number(board.imageWidth) || (loaded[0] && loaded[0].w) || 0;
+        imgNaturalHeight = Number(board.totalHeight) || accY;
+        if (!imgNaturalWidth && loaded[0]) imgNaturalWidth = loaded[0].w;
+        if (!imgNaturalHeight) imgNaturalHeight = accY;
+        simulated = false;
+        if (prevCached && prevCached !== tiles) releaseTiles(prevCached);
+        host._artImageCache = {
+          key: key,
+          tiles: tiles,
+          w: imgNaturalWidth,
+          h: imgNaturalHeight,
+          simulated: false,
+        };
+        if (padBadge) {
+          padBadge.hidden = false;
+          padBadge.textContent = zh()
+            ? `图像 · ${loaded.length}片`
+            : `img · ${loaded.length}`;
+        }
+        if (status) {
+          status.textContent = zh()
+            ? `已加载 ${imgNaturalWidth}×${imgNaturalHeight}`
+            : `Loaded ${imgNaturalWidth}×${imgNaturalHeight}`;
+        }
+        setLoading(false);
+        draw();
+        updateRoiPreview();
+      } catch (e) {
+        if (gen !== loadGen) return;
+        console.warn("artificalAddDefect loadBoardImage", e);
+        useSimulatedBoard();
+        setLoading(false);
+        if (status) {
+          status.textContent = (zh() ? "加载图片失败：" : "Image load failed: ")
+            + ((e && e.message) || e);
+        }
+        draw();
+        updateRoiPreview();
+      }
+    }
+
+    function drawPlaceholder(g, w, h) {
       g.fillStyle = "#121218";
       g.fillRect(0, 0, w, h);
-      g.strokeStyle = "rgba(240,240,250,0.08)";
+      g.strokeStyle = "rgba(201,208,220,0.08)";
       g.lineWidth = 1;
-      const step = 28 * (window.devicePixelRatio || 1);
+      const step = 28;
       for (let x = 0; x < w; x += step) {
         g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke();
       }
       for (let y = 0; y < h; y += step) {
         g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
       }
-      g.fillStyle = "rgba(240,240,250,0.2)";
-      g.font = `${12 * (window.devicePixelRatio || 1)}px Bahnschrift,Segoe UI,sans-serif`;
-      g.fillText("FABRIC BOARD · PREVIEW", 16, 28);
+      g.fillStyle = "rgba(201,208,220,0.28)";
+      g.font = '12px "Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif';
+      g.fillText(zh() ? "模拟布面（无后端拼图）" : "SIM FABRIC · NO TILES", 16, 28);
+    }
+
+    function drawBoard(g) {
+      if (!tiles.length || simulated) {
+        const tl = imgToCanvas(0, 0);
+        const br = imgToCanvas(imgNaturalWidth, imgNaturalHeight);
+        const w = Math.max(1, br.x - tl.x);
+        const h = Math.max(1, br.y - tl.y);
+        g.save();
+        g.beginPath();
+        g.rect(tl.x, tl.y, w, h);
+        g.clip();
+        g.translate(tl.x, tl.y);
+        g.scale(w / Math.max(1, imgNaturalWidth), h / Math.max(1, imgNaturalHeight));
+        drawPlaceholder(g, imgNaturalWidth, imgNaturalHeight);
+        g.restore();
+        return;
+      }
+      const s = worldScale();
+      const ox = (viewW - imgNaturalWidth * s) / 2 + pan.x;
+      const oy = (viewH - imgNaturalHeight * s) / 2 + pan.y;
+      tiles.forEach((t) => {
+        try {
+          g.drawImage(
+            t.drawable,
+            ox,
+            oy + t.yStart * s,
+            t.w * s,
+            t.h * s
+          );
+        } catch (_) { /* ignore tile draw */ }
+      });
+    }
+
+    function updateThumbNav() {
+      if (!thumb) return;
+      if (tiles.length && !simulated) {
+        try {
+          const off = document.createElement("canvas");
+          off.width = 160;
+          off.height = Math.max(40, Math.round(160 * (imgNaturalHeight / Math.max(1, imgNaturalWidth))));
+          const og = off.getContext("2d");
+          const sy = off.height / Math.max(1, imgNaturalHeight);
+          const sx = off.width / Math.max(1, imgNaturalWidth);
+          tiles.forEach((t) => {
+            og.drawImage(t.drawable, 0, t.yStart * sy, t.w * sx, t.h * sy);
+          });
+          thumb.style.backgroundImage = `url(${off.toDataURL("image/jpeg", 0.7)})`;
+          thumb.style.backgroundSize = "cover";
+        } catch (_) {
+          thumb.style.backgroundImage = "";
+        }
+      } else {
+        thumb.style.backgroundImage = "linear-gradient(90deg,#1a1a22 0 40%,#22222c 40% 100%)";
+      }
+      const s = worldScale();
+      const ox = (viewW - imgNaturalWidth * s) / 2 + pan.x;
+      const oy = (viewH - imgNaturalHeight * s) / 2 + pan.y;
+      const left = Math.max(0, Math.min(100, (-ox / Math.max(1, imgNaturalWidth * s)) * 100));
+      const top = Math.max(0, Math.min(100, (-oy / Math.max(1, imgNaturalHeight * s)) * 100));
+      const vw = Math.max(6, Math.min(100, (viewW / Math.max(1, imgNaturalWidth * s)) * 100));
+      const vh = Math.max(6, Math.min(100, (viewH / Math.max(1, imgNaturalHeight * s)) * 100));
+      thumb.innerHTML = `<div class="spx-art-thumb-vp" style="left:${left}%;top:${top}%;width:${vw}%;height:${vh}%"></div>`;
+    }
+
+    function updateRoiPreview() {
+      if (!previewThumb) return;
+      const selId = getState().artificalRoiId;
+      const sel = roisOf().find((r) => r.id === selId);
+      if (!sel) {
+        previewThumb.textContent = zh() ? "暂无预览" : "No preview";
+        previewThumb.classList.remove("has-img");
+        return;
+      }
+      if (!tiles.length || simulated) {
+        previewThumb.textContent = zh() ? "ROI 预览" : "ROI";
+        previewThumb.classList.remove("has-img");
+        return;
+      }
+      try {
+        const rw = Math.max(1, Math.round(sel.w));
+        const rh = Math.max(1, Math.round(sel.h));
+        const off = document.createElement("canvas");
+        off.width = rw;
+        off.height = rh;
+        const og = off.getContext("2d");
+        tiles.forEach((t) => {
+          const overlapY0 = Math.max(sel.y, t.yStart);
+          const overlapY1 = Math.min(sel.y + sel.h, t.yStart + t.h);
+          if (overlapY1 <= overlapY0) return;
+          const sx = Math.max(0, sel.x);
+          const sy = overlapY0 - t.yStart;
+          const sw = Math.min(t.w - sx, sel.w);
+          const sh = overlapY1 - overlapY0;
+          if (sw <= 0 || sh <= 0) return;
+          og.drawImage(
+            t.drawable,
+            sx, sy, sw, sh,
+            0, overlapY0 - sel.y, sw, sh
+          );
+        });
+        previewThumb.innerHTML = `<img src="${off.toDataURL("image/jpeg", 0.85)}" alt="" style="max-width:100%;max-height:100%;object-fit:contain" />`;
+        previewThumb.classList.add("has-img");
+      } catch (_) {
+        previewThumb.textContent = zh() ? "ROI 预览" : "ROI";
+      }
     }
 
     function draw() {
       const w = canvas.width;
       const h = canvas.height;
       ctx2.setTransform(1, 0, 0, 1, 0, 0);
-      drawFabric(ctx2, w, h);
-      ctx2.save();
-      ctx2.translate(pan.x, pan.y);
-      ctx2.scale(zoom, zoom);
+      ctx2.fillStyle = "#0B0E12";
+      ctx2.fillRect(0, 0, w, h);
+      if (imgNaturalWidth > 0 && imgNaturalHeight > 0) drawBoard(ctx2);
+
       const rois = roisOf();
       const sel = getState().artificalRoiId;
       rois.forEach((r) => {
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const x = r.x * dpr;
-        const y = r.y * dpr;
-        const rw = r.w * dpr;
-        const rh = r.h * dpr;
-        ctx2.strokeStyle = r.id === sel ? "#f5c542" : "#ff4d4f";
-        ctx2.lineWidth = 2 / zoom;
+        const tl = imgToCanvas(r.x, r.y);
+        const br = imgToCanvas(r.x + r.w, r.y + r.h);
+        const x = tl.x;
+        const y = tl.y;
+        const rw = br.x - tl.x;
+        const rh = br.y - tl.y;
+        ctx2.strokeStyle = r.id === sel ? "#E0B84A" : "#E85A5C";
+        ctx2.lineWidth = 2;
         ctx2.strokeRect(x, y, rw, rh);
-        ctx2.fillStyle = "rgba(255,77,79,0.12)";
+        ctx2.fillStyle = "rgba(232,90,92,0.12)";
         ctx2.fillRect(x, y, rw, rh);
-        ctx2.fillStyle = "#f0f0fa";
-        ctx2.font = `${11 / zoom}px sans-serif`;
-        ctx2.fillText(`${r.id} ${r.label || ""}`, x + 4, y + 14 / zoom);
+        ctx2.fillStyle = "#C9D0DC";
+        ctx2.font = '11px "Segoe UI","Microsoft YaHei UI",sans-serif';
+        ctx2.fillText(`${r.id} ${r.label || ""}`, x + 4, y + 14);
       });
-      if (draft) {
-        ctx2.strokeStyle = "#3ddc97";
-        ctx2.lineWidth = 2 / zoom;
-        ctx2.setLineDash([6 / zoom, 4 / zoom]);
-        ctx2.strokeRect(draft.x, draft.y, draft.w, draft.h);
+      if (draftImg) {
+        const tl = imgToCanvas(
+          Math.min(draftImg.x, draftImg.x + draftImg.w),
+          Math.min(draftImg.y, draftImg.y + draftImg.h)
+        );
+        const br = imgToCanvas(
+          Math.max(draftImg.x, draftImg.x + draftImg.w),
+          Math.max(draftImg.y, draftImg.y + draftImg.h)
+        );
+        ctx2.strokeStyle = draftImg.measure ? "#5B8CFF" : "#3ddc97";
+        ctx2.lineWidth = 2;
+        ctx2.setLineDash([6, 4]);
+        ctx2.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
         ctx2.setLineDash([]);
       }
-      ctx2.restore();
-      if (thumb) {
-        thumb.style.backgroundImage = `linear-gradient(90deg,#1a1a22 0 40%,#22222c 40% 100%)`;
-        thumb.innerHTML = `<div class="spx-art-thumb-vp" style="left:${8 + pan.x * 0.02}%;top:${8 + pan.y * 0.02}%;width:${28 / zoom}%;height:${22 / zoom}%"></div>`;
-      }
+      updateThumbNav();
       if (zoomLab) zoomLab.textContent = `${Math.round(zoom * 100)}%`;
+    }
+
+    function resize() {
+      const box = canvas.parentElement.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      viewW = Math.max(1, box.width);
+      viewH = Math.max(1, box.height);
+      canvas.width = Math.max(1, Math.floor(viewW * dpr));
+      canvas.height = Math.max(1, Math.floor(viewH * dpr));
+      canvas.style.width = `${viewW}px`;
+      canvas.style.height = `${viewH}px`;
+      ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+      updateRoiPreview();
     }
 
     function onDown(e) {
       const mode = modeOf();
-      const p = toLocal(e);
+      const p = toCanvasLocal(e);
+      const img = canvasToImg(p.x, p.y);
       dragging = true;
-      start = p;
-      if (mode === "rect") draft = { x: p.x, y: p.y, w: 0, h: 0 };
+      startImg = img;
+      if (mode === "rect" || mode === "measure") draftImg = { x: img.x, y: img.y, w: 0, h: 0, measure: mode === "measure" };
       canvas.setPointerCapture(e.pointerId);
     }
     function onMove(e) {
-      const p = toLocal(e);
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const p = toCanvasLocal(e);
+      const img = canvasToImg(p.x, p.y);
       if (coord) {
-        const ix = (p.x / dpr).toFixed(0);
-        const iy = (p.y / dpr).toFixed(0);
-        const mmX = (p.x / dpr * 0.14).toFixed(1);
-        const mmY = (p.y / dpr * 0.14).toFixed(1);
-        const zh = (host.getCtx().lang || "").startsWith("zh");
-        coord.textContent = zh
-          ? `图像 X: ${ix}, Y: ${iy} px | 物理 X: ${mmX}, Y: ${mmY} mm`
-          : `Image X: ${ix}, Y: ${iy} px | Physical X: ${mmX}, Y: ${mmY} mm`;
+        const mmX = (img.x * 0.14).toFixed(1);
+        const mmY = (img.y * 0.14).toFixed(1);
+        coord.textContent = zh()
+          ? `图像 X: ${img.x.toFixed(0)}, Y: ${img.y.toFixed(0)} px | 物理 X: ${mmX}, Y: ${mmY} mm`
+          : `Image X: ${img.x.toFixed(0)}, Y: ${img.y.toFixed(0)} px | Physical X: ${mmX}, Y: ${mmY} mm`;
       }
-      if (!dragging || !start) return;
+      if (!dragging || !startImg) return;
       const mode = modeOf();
       if (mode === "move") {
-        pan.x += e.movementX * (window.devicePixelRatio || 1);
-        pan.y += e.movementY * (window.devicePixelRatio || 1);
+        pan.x += e.movementX;
+        pan.y += e.movementY;
         draw();
         return;
       }
-      if (mode === "rect" && draft) {
-        draft.w = p.x - start.x;
-        draft.h = p.y - start.y;
-        draw();
-      }
-      if (mode === "measure" && start) {
-        draft = { x: start.x, y: start.y, w: p.x - start.x, h: p.y - start.y, measure: true };
+      if ((mode === "rect" || mode === "measure") && draftImg) {
+        draftImg.w = img.x - startImg.x;
+        draftImg.h = img.y - startImg.y;
         draw();
       }
     }
@@ -3302,22 +4509,23 @@
       if (!dragging) return;
       dragging = false;
       const mode = modeOf();
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      if (mode === "rect" && draft && Math.abs(draft.w) > 8 && Math.abs(draft.h) > 8) {
-        const x = Math.min(draft.x, draft.x + draft.w) / dpr;
-        const y = Math.min(draft.y, draft.y + draft.h) / dpr;
-        const w = Math.abs(draft.w) / dpr;
-        const h = Math.abs(draft.h) / dpr;
+      if (mode === "rect" && draftImg && Math.abs(draftImg.w) > 8 && Math.abs(draftImg.h) > 8) {
+        const x = Math.min(draftImg.x, draftImg.x + draftImg.w);
+        const y = Math.min(draftImg.y, draftImg.y + draftImg.h);
+        const w = Math.abs(draftImg.w);
+        const h = Math.abs(draftImg.h);
         host._pendingRoi = { x, y, w, h };
         host.onAction("art-roi-add", "artificalAddDefect", host);
       }
-      if (mode === "measure" && draft && status) {
-        const mm = Math.hypot(draft.w, draft.h) / dpr * 0.14;
-        status.textContent = `Δ ${(Math.hypot(draft.w, draft.h) / dpr).toFixed(0)} px · ~${mm.toFixed(1)} mm`;
+      if (mode === "measure" && draftImg && status) {
+        const px = Math.hypot(draftImg.w, draftImg.h);
+        const mm = px * 0.14;
+        status.textContent = `Δ ${px.toFixed(0)} px · ~${mm.toFixed(1)} mm`;
       }
-      draft = null;
-      start = null;
+      draftImg = null;
+      startImg = null;
       draw();
+      updateRoiPreview();
       try { canvas.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
     }
 
@@ -3330,20 +4538,70 @@
     resize();
     if (hint) hint.style.opacity = "1";
     setTimeout(() => { if (hint) hint.style.opacity = "0"; }, 2200);
+    loadBoardImage();
+
+    function cropRoiToCanvas(roi) {
+      if (!roi || !tiles.length || simulated) return null;
+      const rw = Math.max(1, Math.round(roi.w));
+      const rh = Math.max(1, Math.round(roi.h));
+      const off = document.createElement("canvas");
+      off.width = rw;
+      off.height = rh;
+      const og = off.getContext("2d");
+      tiles.forEach((t) => {
+        const overlapY0 = Math.max(roi.y, t.yStart);
+        const overlapY1 = Math.min(roi.y + roi.h, t.yStart + t.h);
+        if (overlapY1 <= overlapY0) return;
+        const sx = Math.max(0, roi.x);
+        const sy = overlapY0 - t.yStart;
+        const sw = Math.min(t.w - sx, roi.w);
+        const sh = overlapY1 - overlapY0;
+        if (sw <= 0 || sh <= 0) return;
+        og.drawImage(t.drawable, sx, sy, sw, sh, 0, overlapY0 - roi.y, sw, sh);
+      });
+      return off;
+    }
+
+    function exportRoiBlobs(rois) {
+      const list = Array.isArray(rois) ? rois : [];
+      return Promise.all(list.map((r, i) => new Promise((resolve) => {
+        const c = cropRoiToCanvas(r);
+        if (!c) {
+          resolve(null);
+          return;
+        }
+        c.toBlob((blob) => {
+          resolve(blob ? { blob: blob, name: "defect_" + i + "_F.jpg" } : null);
+        }, "image/jpeg", 0.92);
+      }))).then((arr) => arr.filter(Boolean));
+    }
 
     this._toolApi = {
       setZoom(delta) {
         zoom = Math.min(3, Math.max(0.5, zoom + delta));
         draw();
+        updateRoiPreview();
       },
       resetZoom() {
         zoom = 1;
         pan = { x: 0, y: 0 };
         draw();
+        updateRoiPreview();
       },
-      redraw: draw,
+      redraw() {
+        draw();
+        updateRoiPreview();
+      },
+      reloadBoard: loadBoardImage,
+      exportRoiBlobs: exportRoiBlobs,
+      clearImageCache() {
+        const cached = host._artImageCache && host._artImageCache.tiles;
+        if (cached && cached !== tiles) releaseTiles(cached);
+        host._artImageCache = null;
+      },
     };
     this._toolCleanup = () => {
+      loadGen += 1;
       canvas.removeEventListener("pointerdown", onDown);
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerup", onUp);
@@ -3396,14 +4654,14 @@
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.fillStyle = "#121218";
       g.fillRect(0, 0, w, h);
-      g.strokeStyle = "rgba(240,240,250,0.35)";
+      g.strokeStyle = "rgba(201,208,220,0.35)";
       g.strokeRect(0.5, 0.5, w - 1, h - 1);
 
       const xScale = (w - 2 * m) / MAP_MAX_X;
       const yScale = (h - 2 * m) / maxY;
-      g.strokeStyle = "rgba(240,240,250,0.12)";
-      g.fillStyle = "rgba(240,240,250,0.45)";
-      g.font = `${10 * (window.devicePixelRatio || 1)}px Bahnschrift,Segoe UI,sans-serif`;
+      g.strokeStyle = "rgba(201,208,220,0.12)";
+      g.fillStyle = "rgba(201,208,220,0.45)";
+      g.font = `${10 * (window.devicePixelRatio || 1)}px "Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif`;
       for (let x = 0; x <= MAP_MAX_X; x += 200) {
         const sx = m + x * xScale;
         g.beginPath(); g.moveTo(sx, m); g.lineTo(sx, h - m); g.stroke();
@@ -3421,10 +4679,10 @@
         const on = d.id === sel;
         const r = (on ? 7 : 4) * (window.devicePixelRatio || 1);
         g.beginPath();
-        g.fillStyle = on ? "#ff4d4f" : "#3ddc97";
+        g.fillStyle = on ? "#E85A5C" : "#3ddc97";
         g.arc(sx, sy, r, 0, Math.PI * 2);
         g.fill();
-        g.fillStyle = "#f0f0fa";
+        g.fillStyle = "#C9D0DC";
         g.font = `${11 * (window.devicePixelRatio || 1)}px sans-serif`;
         g.textAlign = "center";
         g.fillText(d.title || String(d.id), sx, sy - r - 4);
@@ -3568,7 +4826,7 @@
     function drawSimulatedPanel() {
       g.fillStyle = "#1a1a22";
       g.fillRect(0, 0, imgNaturalWidth, imgNaturalHeight);
-      g.fillStyle = "rgba(240,240,250,0.05)";
+      g.fillStyle = "rgba(201,208,220,0.05)";
       for (let i = 0; i < 32; i++) {
         g.fillRect(i * (imgNaturalWidth / 32), 0, 1, imgNaturalHeight);
       }
@@ -3592,7 +4850,7 @@
       const sorted = sortedEdges();
       sorted.forEach((edge, index) => {
         g.beginPath();
-        g.strokeStyle = index === 0 ? "#ff4d4f" : "#4c9aff";
+        g.strokeStyle = index === 0 ? "#E85A5C" : "#4c9aff";
         g.lineWidth = 2 / Math.max(scale, 0.0001);
         g.moveTo(edge.imgX, 0);
         g.lineTo(edge.imgX, imgNaturalHeight);
@@ -3607,7 +4865,7 @@
         prevXs.forEach((imgX, index) => {
           if (!Number.isFinite(imgX)) return;
           g.beginPath();
-          g.strokeStyle = index === 0 ? "rgba(255,77,79,0.75)" : "rgba(76,154,255,0.75)";
+          g.strokeStyle = index === 0 ? "rgba(232,90,92,0.75)" : "rgba(76,154,255,0.75)";
           g.moveTo(imgX, 0);
           g.lineTo(imgX, imgNaturalHeight);
           g.stroke();
@@ -4179,16 +5437,18 @@
       ctx.settingsTabId = this.settingsTabId;
     if (key === "debug" && this.debugTabId)
       ctx.debugTabId = this.debugTabId;
+    this._defStepEditId = "";
     this.activeKey = key;
     this.triggerEl = trigger || null;
-    this.titleEl.textContent = titleOf(key, ctx.lang);
+    this.titleEl.textContent = key === "login" ? "" : titleOf(key, ctx.lang);
     this.bodyEl.innerHTML = buildBody(key, ctx);
 
     const mode = this.modeFor(key);
     this._placeMode = mode;
     this._placeTrigger = trigger || null;
-    this.shell.classList.remove("center", "quick", "info", "form", "left", "tool", "osk-lift");
+    this.shell.classList.remove("center", "quick", "info", "form", "left", "tool", "osk-lift", "login");
     this.shell.classList.add(mode);
+    if (key === "login") this.shell.classList.add("login");
     if (TOOL_KEYS.has(key)) this.shell.classList.add("tool");
     this.root.classList.toggle("modeless", mode === "left");
     this.root.hidden = false;
@@ -4225,34 +5485,50 @@
     const ctx = this.getCtx() || {};
     if (this.activeKey === "systemSettings" && this.settingsTabId)
       ctx.settingsTabId = this.settingsTabId;
+    this._defStepEditId = "";
     const y = this.bodyEl.scrollTop;
-    this.titleEl.textContent = titleOf(this.activeKey, ctx.lang);
+    this.titleEl.textContent = this.activeKey === "login" ? "" : titleOf(this.activeKey, ctx.lang);
     this.bodyEl.innerHTML = buildBody(this.activeKey, ctx);
     this.bodyEl.scrollTop = y;
     if (TOOL_KEYS.has(this.activeKey)) {
       const key = this.activeKey;
       requestAnimationFrame(() => this._initTool(key));
     }
+    if (this.activeKey === "login") this._syncLoginType();
   };
 
-  /** 仅刷新正文（用于序列图实时更新，不重算位置） */
-  SpxPopupHost.prototype.refresh = function (keys) {
+  /** 仅刷新正文（用于序列图实时更新，不重算位置）
+   * @param {string[]=} keys 限定弹窗 key；空则刷新当前
+   * @param {{force?:boolean}=} opts force=true 时忽略 NO_LIVE_REFRESH（用户筛选/翻页等）
+   */
+  SpxPopupHost.prototype.refresh = function (keys, opts) {
     if (!this.activeKey || this.root.hidden) return;
     if (Array.isArray(keys) && keys.length && keys.indexOf(this.activeKey) < 0) return;
-    // 设置/登录/表单：定时重建会冲掉 tab 与输入
-    if (NO_LIVE_REFRESH_KEYS.has(this.activeKey)) return;
-    // PLCTest：局部刷状态，保留输入与手动勾选
-    if (this.activeKey === "unwind") {
+    const force = !!(opts && opts.force);
+    // 设置/登录/表单：定时重建会冲掉 tab 与输入；用户操作可 force
+    if (!force && NO_LIVE_REFRESH_KEYS.has(this.activeKey)) return;
+    // unwind.html：SPX 版 plctest 局部刷状态，保留输入与手动勾选
+    if (this.activeKey === "unwind" && !force) {
       this._patchPlcTestLive(this.getCtx() || {});
       return;
     }
-    // OSK 编辑中：重建会拆掉目标 input，导致软键盘写值无效
-    if (this.osk && (this.osk.targetId || this.osk.target)) return;
+    // OSK 编辑中：重建会拆掉目标 input；强制刷新时先收起软键盘态
+    if (!force && this.osk && (this.osk.targetId || this.osk.target)) return;
+    if (force && this.osk) {
+      try {
+        if (typeof this.osk.hide === "function") this.osk.hide();
+        else {
+          this.osk.targetId = "";
+          this.osk.target = null;
+        }
+      } catch (_) { /* ignore */ }
+    }
     const prevFocus = document.activeElement;
     const keepFocus = this._placeMode === "left" && prevFocus && !this.root.contains(prevFocus);
     const ctx = this.getCtx() || {};
     if (this.activeKey === "systemSettings" && this.settingsTabId)
       ctx.settingsTabId = this.settingsTabId;
+    this._defStepEditId = "";
     const y = this.bodyEl.scrollTop;
     this.titleEl.textContent = titleOf(this.activeKey, ctx.lang);
     this.bodyEl.innerHTML = buildBody(this.activeKey, ctx);
@@ -4287,12 +5563,16 @@
     this._setPlct("speed", fmtPlc(st.servo_speed != null ? st.servo_speed : s.speed, 2));
     this._setPlct("connect", connected ? (zh ? "已连接" : "ON") : (zh ? "未连接" : "OFF"));
     this._setPlct("alarm", alarm);
-    this._setPlct("unwind", fmtPlc(s.unwind, 0) + "%");
     const tileConn = this.bodyEl.querySelector('[data-plct="connect"]');
-    if (tileConn && tileConn.parentElement) tileConn.parentElement.classList.toggle("warn", !connected);
+    if (tileConn && tileConn.closest) {
+      const tile = tileConn.closest(".spx-plct-tile");
+      if (tile) tile.classList.toggle("warn", !connected);
+    }
     const tileAlarm = this.bodyEl.querySelector('[data-plct="alarm"]');
-    if (tileAlarm && tileAlarm.parentElement)
-      tileAlarm.parentElement.classList.toggle("warn", alarm !== (zh ? "无报警" : "OK"));
+    if (tileAlarm && tileAlarm.closest) {
+      const tile = tileAlarm.closest(".spx-plct-tile");
+      if (tile) tile.classList.toggle("warn", alarm !== (zh ? "无报警" : "OK"));
+    }
 
     const breadth = st.plc_fabric_width != null ? st.plc_fabric_width : st.fabric_width;
     this._setPlct("encoder", fmtPlc(st.encoder, 0));
@@ -4306,17 +5586,18 @@
     this._setPlct("wR", fmtPlc(st.width_sensor_right, 2));
     this._setPlct("liveW", fmtPlc(st.live_weight, 2));
     this._setPlct("lastW", fmtPlc(st.last_weight, 2));
-    this._setPlct(
-      "xyz",
-      `${fmtPlc(st.current_x, "int")} / ${fmtPlc(st.current_y, "int")} / ${fmtPlc(st.current_z, "int")}`
-    );
     this._setPlct("lblX", fmtPlc(st.current_x, "int"));
     this._setPlct("lblY", fmtPlc(st.current_y, "int"));
     this._setPlct("lblZ", fmtPlc(st.current_z, "int"));
     {
-      const zhLang = (ctx.lang || "").indexOf("zh") === 0;
+      const reverse = !!st.shaft_rotation_reverse;
+      this._setPlct("rollMode", reverse ? (zh ? "反转" : "Reverse") : (zh ? "正转" : "Forward"));
       const done = Number(st.label_finish_stop) !== 0;
-      this._setPlct("lblFin", done ? (zhLang ? "是" : "Y") : (zhLang ? "否" : "N"));
+      const radios = this.bodyEl.querySelectorAll("#plctLabelFinish input[type='radio']");
+      if (radios.length >= 2) {
+        radios[0].checked = !done;
+        radios[1].checked = done;
+      }
     }
 
     // 未编辑过的设定框：首次/空值时用状态填充
@@ -4353,99 +5634,112 @@
         ? Math.max(180, this.osk.root.getBoundingClientRect().height || 240)
         : 0;
     const availBottom = stageRect.bottom - oskH - 8;
+    const pad = 8;
+    const headerEl = document.querySelector("#SpxHeaderBar, .SpxHeaderBar, .topbar, header.spx-header");
+    const bottomEl = document.querySelector("#SpxBottomHud, .SpxBottomHud, .bottom-hud, footer.spx-bottom");
+    const headerH = headerEl ? Math.max(0, headerEl.getBoundingClientRect().bottom - stageRect.top) : 56;
+    const bottomH = bottomEl ? Math.max(0, stageRect.bottom - bottomEl.getBoundingClientRect().top) : 110;
+    const midTop = stageRect.top + headerH + pad;
+    const midBottom = Math.min(availBottom - 4, stageRect.bottom - bottomH - pad);
+    const midLeft = stageRect.left + pad;
+    const midRight = stageRect.right - pad;
+    const midH = Math.max(200, midBottom - midTop);
+    const midW = Math.max(280, midRight - midLeft);
+    const midCy = midTop + midH / 2;
+    const t = trigger ? trigger.getBoundingClientRect() : null;
+    const gap = 8;
+
+    const st = (this.getCtx && this.getCtx()) ? (this.getCtx().state || {}) : {};
+    const sizeFrac = (keyName, defPct) => {
+      const n = Number(st[keyName]);
+      const pct = Number.isFinite(n) ? n : defPct;
+      return Math.max(20, Math.min(100, Math.round(pct))) / 100;
+    };
+
+    const placeCentered = (wFrac, hFrac) => {
+      const w = Math.max(280, Math.min(midW, Math.round(midW * wFrac)));
+      const h = Math.max(200, Math.min(midH, Math.round(midH * hFrac)));
+      return {
+        w,
+        h,
+        x: midLeft + (midW - w) / 2,
+        y: midTop + (midH - h) / 2,
+      };
+    };
+
+    const placeAnchored = (wFrac, hFrac) => {
+      const w = Math.max(280, Math.min(midW, Math.round(midW * wFrac)));
+      const h = Math.max(200, Math.min(midH, Math.round(midH * hFrac)));
+      let x = t ? t.left + t.width / 2 - w / 2 : midLeft + (midW - w) / 2;
+      x = Math.min(Math.max(x, midLeft), Math.max(midLeft, midRight - w));
+      let y = midTop;
+      if (h < midH - 2) {
+        const preferBelow = !t || t.top + t.height / 2 <= midCy;
+        if (preferBelow) {
+          y = t ? Math.max(midTop, t.bottom + gap) : midTop;
+          if (y + h > midBottom) y = t ? t.top - gap - h : midBottom - h;
+        } else {
+          y = t ? t.top - gap - h : midBottom - h;
+          if (y < midTop) y = t ? Math.max(midTop, t.bottom + gap) : midTop;
+        }
+        y = Math.min(Math.max(y, midTop), Math.max(midTop, midBottom - h));
+      }
+      return { w, h, x, y };
+    };
 
     let w, h, x, y;
-    if (mode === "center") {
-      const pad = 8;
-      const headerEl = document.querySelector("#SpxHeaderBar, .SpxHeaderBar, .topbar, header.spx-header");
-      const bottomEl = document.querySelector("#SpxBottomHud, .SpxBottomHud, .bottom-hud, footer.spx-bottom");
-      const headerH = headerEl ? Math.max(0, headerEl.getBoundingClientRect().bottom - stageRect.top) : 56;
-      const bottomH = bottomEl ? Math.max(0, stageRect.bottom - bottomEl.getBoundingClientRect().top) : 110;
-
-      if (this.activeKey === "debug") {
-        // 硬件调试：顶栏以下整片（覆盖中间区 + 底栏）
-        w = Math.max(480, stageRect.width - pad * 2);
-        h = Math.max(360, stageRect.height - headerH - pad * 2);
-        x = stageRect.left + pad;
-        y = stageRect.top + headerH + pad;
-      } else if (MID_BAND_KEYS.has(this.activeKey)) {
-        // 检验记录 / 疵点设置 / 新增·编辑疵点：仅铺满顶底栏之间
-        w = Math.max(480, stageRect.width - pad * 2);
-        h = Math.max(360, stageRect.height - headerH - bottomH - pad * 2);
-        x = stageRect.left + pad;
-        y = stageRect.top + headerH + pad;
-      } else {
-        w = Math.max(480, stageRect.width * 0.95);
-        h = Math.max(360, stageRect.height * 0.95);
-        x = stageRect.left + (stageRect.width - w) / 2;
-        y = stageRect.top + (stageRect.height - h) / 2;
-      }
-    } else if (mode === "form") {
-      // 检验单信息：居中紧凑，约 480–560 宽；登录更小；弹出键盘时上移避让
-      if (this.activeKey === "login") {
-        w = Math.max(340, Math.min(400, stageRect.width * 0.30));
-        h = Math.max(260, Math.min(340, (availBottom - stageRect.top) * 0.36));
-      } else {
-        w = Math.max(440, Math.min(560, stageRect.width * 0.38));
-        h = Math.max(360, Math.min(oskH ? 480 : 620, (availBottom - stageRect.top) * (oskH ? 0.92 : 0.72)));
-      }
-      x = stageRect.left + (stageRect.width - w) / 2;
-      y = stageRect.top + Math.max(8, (availBottom - stageRect.top - h) / 2);
-    } else if (mode === "info") {
-      // 对齐 NoClothStopDialog：主界面约 1/3 宽；取样/色差文案略增高
-      w = Math.max(380, Math.min(560, stageRect.width / 3));
-      h = Math.max(260, Math.min(440, w * 0.85));
-      x = stageRect.left + (stageRect.width - w) / 2;
-      y = stageRect.top + (stageRect.height - h) / 2;
-    } else if (mode === "left") {
-      // 疵点详情：贴在右侧疵点列表左侧旁，高度与列表对齐
+    const key = this.activeKey || "";
+    if (mode === "left") {
       const listEl = document.querySelector(".hud-panel.list");
-      const listRect = listEl ? listEl.getBoundingClientRect() : (trigger ? trigger.getBoundingClientRect() : null);
-      w = Math.max(260, Math.min(340, stageRect.width * 0.24));
+      const listRect = listEl ? listEl.getBoundingClientRect() : t;
+      w = Math.max(260, Math.min(340, stageRect.width * 0.24, midW));
       if (listRect && listRect.width > 0) {
-        h = Math.max(280, Math.min(listRect.height, availBottom - listRect.top - 4));
-        x = listRect.left - 8 - w;
-        y = listRect.top;
+        h = Math.max(200, Math.min(listRect.height, midH));
+        x = listRect.left - gap - w;
+        y = Math.min(Math.max(listRect.top, midTop), Math.max(midTop, midBottom - h));
       } else {
-        h = Math.max(320, Math.min(availBottom - stageRect.top - 16, stageRect.height * 0.88));
-        x = stageRect.right - 16 - 280 - 8 - w;
-        y = stageRect.top + 16;
+        ({ w, h, x, y } = placeAnchored(0.24, 1));
+        x = midRight - w;
       }
+    } else if (mode === "center" || MID_BAND_KEYS.has(key)) {
+      w = midW;
+      h = midH;
+      x = midLeft;
+      y = midTop;
+    } else if (mode === "form" || FORM_KEYS.has(key)) {
+      if (key === "about") {
+        ({ w, h, x, y } = placeCentered(
+          sizeFrac("UI_POPUP_SIZE_ABOUT_W_PCT", 40),
+          sizeFrac("UI_POPUP_SIZE_ABOUT_H_PCT", 70)
+        ));
+      } else if (key === "login") {
+        ({ w, h, x, y } = placeCentered(
+          sizeFrac("UI_POPUP_SIZE_LOGIN_W_PCT", 30),
+          sizeFrac("UI_POPUP_SIZE_LOGIN_H_PCT", 50)
+        ));
+      } else {
+        ({ w, h, x, y } = placeCentered(
+          sizeFrac("UI_POPUP_SIZE_SYSMSG_W_PCT", 50),
+          sizeFrac("UI_POPUP_SIZE_SYSMSG_H_PCT", 50)
+        ));
+      }
+    } else if (mode === "info" || SHEET_EDITOR_KEYS.has(key)) {
+      ({ w, h, x, y } = placeCentered(
+        sizeFrac("UI_POPUP_SIZE_SHEET_W_PCT", 40),
+        sizeFrac("UI_POPUP_SIZE_SHEET_H_PCT", 80)
+      ));
+    } else if (SETTINGS_KEYS.has(key)) {
+      ({ w, h, x, y } = placeAnchored(
+        sizeFrac("UI_POPUP_SIZE_SETTINGS_W_PCT", 60),
+        sizeFrac("UI_POPUP_SIZE_SETTINGS_H_PCT", 100)
+      ));
     } else {
-      // Quick（含系统设置 / 放卷PLCTest）：相对触发按钮上/下，水平对中
-      const t = trigger ? trigger.getBoundingClientRect() : null;
-      if (this.activeKey === "unwind") {
-        // admin 2×2 需要更宽更高；贴触发按钮上方铺开
-        w = Math.max(520, Math.min(720, stageRect.width * 0.58));
-        const above = t ? Math.max(320, t.top - stageRect.top - 12) : stageRect.height * 0.82;
-        const below = t ? Math.max(320, availBottom - t.bottom - 12) : above;
-        h = Math.max(420, Math.min(stageRect.height * 0.9, Math.max(above, below)));
-      } else {
-        w = Math.max(360, stageRect.width * 0.5);
-        h = Math.max(280, stageRect.height * 0.8);
-      }
-      x = t ? t.left + t.width / 2 - w / 2 : stageRect.left + (stageRect.width - w) / 2;
-      if (t && t.top < stageRect.top + stageRect.height / 2) {
-        y = t.bottom + 8;
-        if (y + h > availBottom) y = Math.max(stageRect.top + 4, availBottom - h - 4);
-      } else if (t) {
-        y = t.top - 8 - h;
-        if (y < stageRect.top + 4) {
-          // 上方不够则夹在 stage 顶与按钮之间
-          y = stageRect.top + 4;
-          h = Math.max(280, Math.min(h, t.top - y - 8));
-        }
-      } else {
-        y = stageRect.top + (stageRect.height - h) / 2;
-      }
+      ({ w, h, x, y } = placeAnchored(
+        sizeFrac("UI_POPUP_SIZE_INFO_W_PCT", 60),
+        sizeFrac("UI_POPUP_SIZE_INFO_H_PCT", 60)
+      ));
     }
 
-    x = Math.min(Math.max(x, stageRect.left + 4), stageRect.right - w - 4);
-    // 防止过高弹窗把 y 顶出可视区（admin PLCTest 尤其）
-    if (y + h > availBottom - 4) {
-      h = Math.max(260, availBottom - 4 - y);
-    }
-    y = Math.min(Math.max(y, stageRect.top + 4), Math.max(stageRect.top + 4, availBottom - h - 4));
     this.shell.style.width = `${Math.round(w)}px`;
     this.shell.style.height = `${Math.round(h)}px`;
     this.shell.style.left = `${Math.round(x)}px`;
@@ -4454,6 +5748,16 @@
 
   SpxPopupHost.prototype._onClick = function (e) {
     const actEl = e.target.closest("[data-act]");
+    // 尺寸弹出编辑：点外部关闭
+    if (this._defStepEditId) {
+      const editor = this.bodyEl && this.bodyEl.querySelector("#popDefStepEditor");
+      const inEditor = !!(editor && editor.contains(e.target));
+      const act = actEl && actEl.getAttribute("data-act");
+      const reopen = act === "def-step-edit";
+      if (!inEditor && !reopen && act !== "def-step-editor-delta") {
+        this._closeDefStepEditor();
+      }
+    }
     if (!actEl) {
       if (e.target.classList.contains("spx-light-card")) {
         this.bodyEl.querySelectorAll(".spx-light-card").forEach((c) => c.classList.remove("active"));
@@ -4462,6 +5766,83 @@
       return;
     }
     const act = actEl.getAttribute("data-act");
+    if (act === "login-type") {
+      const type = actEl.getAttribute("data-type");
+      const typeEl = this.bodyEl && this.bodyEl.querySelector("#popLoginType");
+      if (typeEl && type) typeEl.value = type;
+      this._syncLoginType();
+      return;
+    }
+    if (act === "login-pick-user") {
+      const name = actEl.getAttribute("data-user") || "";
+      const userEl = this.bodyEl && this.bodyEl.querySelector("#popLoginUser");
+      if (userEl) userEl.value = name;
+      this.bodyEl.querySelectorAll('[data-act="login-pick-user"]').forEach((b) => {
+        b.classList.toggle("active", b === actEl);
+      });
+      return;
+    }
+    if (act === "login-add-toggle") {
+      const add = this.bodyEl && this.bodyEl.querySelector("#popLoginAdd");
+      const pane = this.bodyEl && this.bodyEl.querySelector("#popLoginUserRow");
+      if (!add) return;
+      const open = !!add.hidden;
+      add.hidden = !open;
+      actEl.classList.toggle("active", open);
+      if (pane) pane.classList.toggle("is-adding", open);
+      if (open) {
+        const nameInp = this.bodyEl.querySelector("#popLoginAddName");
+        if (nameInp) {
+          try { nameInp.focus(); } catch (_) { /* ignore */ }
+        }
+      }
+      return;
+    }
+    if (act === "login-add-cancel") {
+      const add = this.bodyEl && this.bodyEl.querySelector("#popLoginAdd");
+      const pane = this.bodyEl && this.bodyEl.querySelector("#popLoginUserRow");
+      const toggle = this.bodyEl && this.bodyEl.querySelector('[data-act="login-add-toggle"]');
+      if (add) add.hidden = true;
+      if (pane) pane.classList.remove("is-adding");
+      if (toggle) toggle.classList.remove("active");
+      return;
+    }
+    if (act === "login-add-user") {
+      this.onAction("login-add-user", this.activeKey, this);
+      return;
+    }
+    if (act === "login-del-ask") {
+      const id = actEl.getAttribute("data-id") || "";
+      const name = actEl.getAttribute("data-user") || "";
+      const box = this.bodyEl && this.bodyEl.querySelector("#popLoginConfirm");
+      const msg = this.bodyEl && this.bodyEl.querySelector("#popLoginConfirmMsg");
+      const pane = this.bodyEl && this.bodyEl.querySelector("#popLoginUserRow");
+      if (!id || !box) return;
+      this._loginDelId = id;
+      this._loginDelName = name;
+      if (msg) {
+        const zh = ((this.getCtx() || {}).lang || "").indexOf("zh") === 0;
+        msg.textContent = zh
+          ? `确认删除操作员「${name}」？删除后不可恢复。`
+          : `Delete operator "${name}"? This cannot be undone.`;
+      }
+      box.hidden = false;
+      if (pane) pane.classList.add("is-confirming");
+      return;
+    }
+    if (act === "login-del-cancel") {
+      const box = this.bodyEl && this.bodyEl.querySelector("#popLoginConfirm");
+      const pane = this.bodyEl && this.bodyEl.querySelector("#popLoginUserRow");
+      this._loginDelId = "";
+      this._loginDelName = "";
+      if (box) box.hidden = true;
+      if (pane) pane.classList.remove("is-confirming");
+      return;
+    }
+    if (act === "login-del-ok") {
+      this.onAction("login-del-user", this.activeKey, this);
+      return;
+    }
     if (act === "close" || act === "finish-no" || act === "nocloth-cancel") {
       this.close();
       return;
@@ -4494,6 +5875,22 @@
           if (src) frame.setAttribute("src", src);
         }
       });
+      return;
+    }
+    if (act === "plct-io-open") {
+      const sub = this.bodyEl && this.bodyEl.querySelector("#popPlcIo");
+      const frame = this.bodyEl && this.bodyEl.querySelector("#popPlcIoFrame");
+      if (frame) {
+        const src = frame.getAttribute("data-src") || "/newviews/plcstatus?hideNavbar=1&theme=spx";
+        if (!frame.getAttribute("src") || frame.getAttribute("src") === "about:blank")
+          frame.setAttribute("src", src);
+      }
+      if (sub) sub.hidden = false;
+      return;
+    }
+    if (act === "plct-io-close") {
+      const sub = this.bodyEl && this.bodyEl.querySelector("#popPlcIo");
+      if (sub) sub.hidden = true;
       return;
     }
     if (act === "plct-manual-open") {
@@ -4585,18 +5982,54 @@
       if (inp) inp.value = "";
       return;
     }
-    if (act === "def-step") {
+    if (act === "def-step-edit") {
       const id = actEl.getAttribute("data-target");
-      const wrap = id ? this.bodyEl.querySelector(`.spx-def-step[data-step-id="${id}"]`) : null;
-      const inp = id ? this.bodyEl.querySelector(`#${id}`) : null;
-      if (!wrap || !inp) return;
+      if (!id) return;
+      if (this._defStepEditId === id) {
+        this._closeDefStepEditor();
+        return;
+      }
+      this._openDefStepEditor(id, actEl);
+      return;
+    }
+    if (act === "def-step-editor-delta") {
+      const editorInp = this.bodyEl && this.bodyEl.querySelector("#popDefStepEditorVal");
+      const wrap = this._defStepEditId
+        ? this.bodyEl.querySelector(`.spx-def-step[data-step-id="${this._defStepEditId}"]`)
+        : null;
+      if (!editorInp || !wrap) return;
       const min = Number(wrap.getAttribute("data-min")) || 0;
       const max = Number(wrap.getAttribute("data-max")) || 9999;
       const step = Number(wrap.getAttribute("data-step")) || 1;
       const delta = Number(actEl.getAttribute("data-delta")) || 0;
-      const cur = Number(inp.value) || 0;
+      const cur = Number(editorInp.value) || 0;
       const next = Math.min(max, Math.max(min, cur + delta * step));
-      inp.value = String(next);
+      editorInp.value = String(next);
+      this._commitDefStepEditor();
+      return;
+    }
+    if (act === "ws-step") {
+      const wrap = actEl.closest("[data-ws-step]");
+      const inp = wrap ? wrap.querySelector("input[data-setting-key]") : null;
+      if (!wrap || !inp) return;
+      const min = Number(wrap.getAttribute("data-min"));
+      const max = Number(wrap.getAttribute("data-max"));
+      const step = Number(wrap.getAttribute("data-step")) || 1;
+      const delta = Number(actEl.getAttribute("data-delta")) || 0;
+      const lo = Number.isFinite(min) ? min : 0;
+      const hi = Number.isFinite(max) ? max : 9999;
+      const cur = Number(inp.value);
+      const base = Number.isFinite(cur) ? cur : 0;
+      inp.value = String(Math.min(hi, Math.max(lo, base + delta * step)));
+      return;
+    }
+    if (act === "ws-mode") {
+      const v = actEl.getAttribute("data-v");
+      const inp = this.bodyEl.querySelector("#wsDetectEdgeMode");
+      if (inp && v != null) inp.value = String(v);
+      this.bodyEl.querySelectorAll(".spx-ws-mode-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-v") === String(v));
+      });
       return;
     }
     if (act === "art-zoom") {
@@ -4613,6 +6046,28 @@
       this.onAction(act, this.activeKey, this);
       return;
     }
+    if (act === "defect-settings-cloth-add") {
+      const box = this.bodyEl && this.bodyEl.querySelector("#popDefectClothAdd");
+      if (box) box.hidden = false;
+      const inp = this.bodyEl && this.bodyEl.querySelector("#popDefectClothName");
+      if (inp) {
+        inp.value = "";
+        requestAnimationFrame(() => {
+          try {
+            inp.focus({ preventScroll: true });
+            inp.select();
+          } catch (_) { /* ignore */ }
+        });
+      }
+      return;
+    }
+    if (act === "defect-settings-cloth-add-cancel") {
+      const box = this.bodyEl && this.bodyEl.querySelector("#popDefectClothAdd");
+      if (box) box.hidden = true;
+      return;
+    }
+    // 原生 select 只在 change 里处理，避免点开下拉就 onAction
+    if (actEl.tagName === "SELECT") return;
     if (actEl.hasAttribute("disabled") || actEl.disabled) return;
     // 透传 data-id / data-mode / data-label 供宿主更新状态
     this._actEl = actEl;
@@ -4706,12 +6161,80 @@
   SpxPopupHost.prototype._syncLoginType = function () {
     if (!this.bodyEl) return;
     const typeEl = this.bodyEl.querySelector("#popLoginType");
+    const root = this.bodyEl.querySelector("#popLoginRoot") || this.bodyEl.querySelector(".spx-login");
     const userRow = this.bodyEl.querySelector("#popLoginUserRow");
     const passRow = this.bodyEl.querySelector("#popLoginPassRow");
+    const addBox = this.bodyEl.querySelector("#popLoginAdd");
+    const addToggle = this.bodyEl.querySelector('[data-act="login-add-toggle"]');
     if (!typeEl) return;
     const admin = typeEl.value === "admin";
-    if (userRow) userRow.hidden = admin;
-    if (passRow) passRow.hidden = !admin;
+    if (root) {
+      root.classList.toggle("is-admin", admin);
+      root.classList.toggle("is-user", !admin);
+    }
+    if (userRow) {
+      userRow.hidden = admin;
+      userRow.style.display = admin ? "none" : "";
+    }
+    if (passRow) {
+      passRow.hidden = !admin;
+      passRow.style.display = admin ? "" : "none";
+    }
+    if (admin) {
+      if (addBox) addBox.hidden = true;
+      if (addToggle) addToggle.classList.remove("active");
+      if (userRow) userRow.classList.remove("is-adding", "is-confirming");
+      this.closeLoginConfirm();
+    }
+    this.bodyEl.querySelectorAll('[data-act="login-type"]').forEach((b) => {
+      b.classList.toggle("active", b.getAttribute("data-type") === typeEl.value);
+    });
+    const pass = this.bodyEl.querySelector("#popLoginPass");
+    if (!admin) {
+      if (pass) pass.value = "";
+    } else if (pass) {
+      requestAnimationFrame(() => {
+        try { pass.focus(); } catch (_) { /* ignore */ }
+      });
+    }
+  };
+
+  /** 刷新登录弹窗操作员列表（新增/删除后调用） */
+  SpxPopupHost.prototype.refreshLoginUsers = function (users, pickName) {
+    if (!this.bodyEl) return;
+    const list = normalizeLoginUsers(users);
+    const userEl = this.bodyEl.querySelector("#popLoginUser");
+    const current = pickName || (userEl && userEl.value) || (list[0] && list[0].name) || "";
+    const chips = this.bodyEl.querySelector("#popLoginUsers");
+    const zh = ((this.getCtx() || {}).lang || "").indexOf("zh") === 0;
+    if (chips) chips.innerHTML = renderLoginUserChips(list, current, zh);
+    if (userEl) {
+      userEl.innerHTML = renderLoginUserOptions(list, current);
+      if (list.some((u) => u.name === current)) userEl.value = current;
+      else userEl.value = (list[0] && list[0].name) || "";
+    }
+    const ctx = this.getCtx && this.getCtx();
+    if (ctx) ctx.users = list;
+  };
+
+  SpxPopupHost.prototype.closeLoginAddPanel = function () {
+    if (!this.bodyEl) return;
+    const add = this.bodyEl.querySelector("#popLoginAdd");
+    const pane = this.bodyEl.querySelector("#popLoginUserRow");
+    const toggle = this.bodyEl.querySelector('[data-act="login-add-toggle"]');
+    if (add) add.hidden = true;
+    if (pane) pane.classList.remove("is-adding");
+    if (toggle) toggle.classList.remove("active");
+  };
+
+  SpxPopupHost.prototype.closeLoginConfirm = function () {
+    if (!this.bodyEl) return;
+    const box = this.bodyEl.querySelector("#popLoginConfirm");
+    const pane = this.bodyEl.querySelector("#popLoginUserRow");
+    this._loginDelId = "";
+    this._loginDelName = "";
+    if (box) box.hidden = true;
+    if (pane) pane.classList.remove("is-confirming");
   };
 
   SpxPopupHost.prototype._onInput = function (e) {
@@ -4761,6 +6284,10 @@
       this._actEl = t;
       this.onAction("light-live", this.activeKey, this);
     }
+    if (t.id === "popDefStepEditorVal" && this._defStepEditId) {
+      this._commitDefStepEditor();
+      return;
+    }
     if (t.getAttribute("data-act") === "def-prec" && t.id) {
       const lab = this.bodyEl.querySelector(`#${t.id}Val`);
       if (lab) lab.textContent = String(t.value);
@@ -4773,6 +6300,27 @@
     if (t.id === "popRecQueryType") {
       this._actEl = t;
       this.onAction("rec-query-type", this.activeKey, this);
+    }
+    if (t.id === "popRecColSearch") {
+      // 本地过滤可选字段，避免整页刷新丢失焦点
+      if (e.type === "input" || e.type === "change") {
+        const q = String(t.value || "").trim().toLowerCase();
+        const ctx = this.getCtx && this.getCtx();
+        if (ctx && ctx.state && ctx.state.recordsUi) ctx.state.recordsUi.settingsQuery = t.value || "";
+        const list = this.bodyEl && this.bodyEl.querySelector("#popRecColAvailable");
+        if (list) {
+          list.querySelectorAll(".spx-rec-col-item").forEach((item) => {
+            const name = (item.querySelector(".col-name") && item.querySelector(".col-name").textContent) || "";
+            const key = (item.querySelector(".col-key") && item.querySelector(".col-key").textContent) || "";
+            const col = item.getAttribute("data-column") || "";
+            const hit = !q
+              || name.toLowerCase().indexOf(q) >= 0
+              || key.toLowerCase().indexOf(q) >= 0
+              || col.toLowerCase().indexOf(q) >= 0;
+            item.style.display = hit ? "" : "none";
+          });
+        }
+      }
     }
     // select 在现代浏览器会先 input 再 change，只处理 change 避免重复拉库
     if (
