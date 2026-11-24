@@ -5,26 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bullmer 验布机软件 · 使用说明与在线测试</title>
   <meta name="description" content="Bullmer 验布机软件官方静态站：使用说明、在线 UI 测试、更新日志与安装包下载。" />
-  <meta name="theme-color" content="#23201a" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <meta name="theme-color" content="#0b0e12" />
   <style>
     :root {
-      --bg: #23201a;
-      --bg-2: #1a1814;
-      --bg-3: #141210;
-      --ink: #f4efe8;
-      --muted: #a39a8f;
-      --line: rgba(244, 239, 232, 0.12);
-      --line-strong: rgba(244, 239, 232, 0.22);
-      --cta: #8b4a34;
-      --cta-hover: #a3563c;
-      --ok: #5ecf8a;
-      --accent: #e8b86d;
-      --font: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
-      --display: "Syne", "Noto Sans SC", sans-serif;
-      --radius: 12px;
+      /* 对齐 CustomUIV3 SpaceX Ops Console */
+      --bg: #0b0e12;
+      --bg-2: #0e121a;
+      --bg-3: #090b0f;
+      --ink: #c9d0dc;
+      --muted: #8b93a7;
+      --line: rgba(201, 208, 220, 0.12);
+      --line-strong: rgba(201, 208, 220, 0.22);
+      --panel-border: #2a3140;
+      --ghost: rgba(201, 208, 220, 0.06);
+      --cta: #5b8cff;
+      --cta-hover: #7aa1ff;
+      --cta-soft: rgba(91, 140, 255, 0.18);
+      --ok: #3ddc97;
+      --warn: #e0b84a;
+      --bad: #e85a5c;
+      --accent: #5b8cff;
+      --font: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      --display: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      --font-mono: "Cascadia Mono", "Consolas", "Segoe UI", monospace;
+      --radius: 8px;
       --max: 1120px;
     }
 
@@ -42,15 +46,14 @@
     a { color: inherit; text-decoration: none; }
     button { font: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
 
-    /* subtle grid like ccswitch */
     .grid-bg {
       position: fixed;
       inset: 0;
       pointer-events: none;
       z-index: 0;
       background-image:
-        linear-gradient(rgba(244,239,232,0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(244,239,232,0.035) 1px, transparent 1px);
+        linear-gradient(rgba(201,208,220,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(201,208,220,0.04) 1px, transparent 1px);
       background-size: 72px 72px;
       mask-image: radial-gradient(ellipse 70% 60% at 50% 20%, #000 20%, transparent 75%);
     }
@@ -68,7 +71,7 @@
       top: 0;
       z-index: 50;
       backdrop-filter: blur(14px);
-      background: rgba(35, 32, 26, 0.82);
+      background: rgba(14, 18, 26, 0.88);
       border-bottom: 1px solid transparent;
       transition: border-color 200ms ease;
     }
@@ -86,15 +89,16 @@
       gap: 10px;
       font-family: var(--display);
       font-weight: 700;
-      font-size: 18px;
-      letter-spacing: 0.02em;
+      font-size: 17px;
+      letter-spacing: 0;
+      color: #e8edf5;
     }
     .brand-mark {
       width: 28px;
       height: 28px;
       border-radius: 8px;
       background:
-        conic-gradient(from 210deg, #e8b86d, #8b4a34, #5ecf8a, #6ea8ff, #e8b86d);
+        conic-gradient(from 210deg, #5b8cff, #3ddc97, #e0b84a, #5b8cff);
       position: relative;
     }
     .brand-mark::after {
@@ -118,13 +122,13 @@
       font-weight: 500;
       transition: color 160ms ease, background 160ms ease;
     }
-    .nav-links a:hover { color: var(--ink); background: rgba(244,239,232,0.06); }
+    .nav-links a:hover { color: var(--ink); background: var(--ghost); }
     .nav-cta {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       padding: 9px 16px;
-      border-radius: 999px;
+      border-radius: 8px;
       background: var(--cta);
       color: #fff;
       font-size: 14px;
@@ -159,8 +163,8 @@
       gap: 8px;
       padding: 6px 14px;
       border-radius: 999px;
-      border: 1px solid var(--line-strong);
-      background: rgba(0,0,0,0.18);
+      border: 1px solid var(--ghost-border-strong, var(--line-strong));
+      background: rgba(14, 18, 26, 0.85);
       color: var(--muted);
       font-size: 13px;
       font-weight: 500;
@@ -177,9 +181,9 @@
       width: 72px;
       height: 72px;
       margin: 0 auto 18px;
-      border-radius: 20px;
+      border-radius: 16px;
       background:
-        conic-gradient(from 210deg, #e8b86d, #8b4a34, #5ecf8a, #6ea8ff, #e8b86d);
+        conic-gradient(from 210deg, #5b8cff, #3ddc97, #e0b84a, #5b8cff);
       position: relative;
       animation: spin 18s linear infinite;
     }
@@ -198,10 +202,11 @@
     .hero h1 {
       font-family: var(--display);
       font-size: clamp(40px, 7vw, 64px);
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      line-height: 1.05;
+      font-weight: 700;
+      letter-spacing: 0;
+      line-height: 1.1;
       margin-bottom: 16px;
+      color: #e8edf5;
     }
     .hero .lead {
       max-width: 560px;
@@ -222,11 +227,12 @@
       align-items: center;
       gap: 8px;
       padding: 8px 14px;
-      border-radius: 999px;
-      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      border: 1px solid rgba(201, 208, 220, 0.16);
+      background: rgba(201, 208, 220, 0.06);
       color: var(--ink);
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
     }
     .pill svg { width: 14px; height: 14px; color: var(--ok); flex-shrink: 0; }
     .cta-row {
@@ -241,9 +247,9 @@
       align-items: center;
       justify-content: center;
       gap: 10px;
-      min-height: 48px;
-      padding: 12px 22px;
-      border-radius: 12px;
+      min-height: 44px;
+      padding: 10px 20px;
+      border-radius: 8px;
       font-size: 15px;
       font-weight: 600;
       transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
@@ -259,7 +265,7 @@
       background: transparent;
       color: var(--ink);
     }
-    .btn-ghost:hover { background: rgba(244,239,232,0.06); }
+    .btn-ghost:hover { background: var(--ghost); }
     .hero-meta {
       color: rgba(163,154,143,0.85);
       font-size: 13px;
@@ -276,10 +282,11 @@
     }
     .section-head h2 {
       font-family: var(--display);
-      font-size: clamp(28px, 4vw, 40px);
+      font-size: clamp(28px, 4vw, 36px);
       font-weight: 700;
-      letter-spacing: -0.02em;
+      letter-spacing: 0;
       margin-bottom: 12px;
+      color: #e8edf5;
     }
     .section-head p { color: var(--muted); font-size: 16px; }
 
@@ -294,7 +301,7 @@
       padding: 20px 12px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      background: rgba(244,239,232,0.02);
+      background: var(--ghost);
     }
     .stat strong {
       display: block;
@@ -312,22 +319,22 @@
     }
     .feature {
       padding: 24px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: rgba(244,239,232,0.025);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      background: rgba(14, 18, 26, 0.72);
       transition: border-color 180ms ease, background 180ms ease;
     }
     .feature:hover {
-      border-color: var(--line-strong);
-      background: rgba(244,239,232,0.05);
+      border-color: rgba(91, 140, 255, 0.45);
+      background: var(--cta-soft);
     }
     .feature-icon {
       width: 40px;
       height: 40px;
-      border-radius: 10px;
+      border-radius: 8px;
       display: grid;
       place-items: center;
-      background: rgba(139,74,52,0.22);
+      background: var(--cta-soft);
       color: var(--accent);
       margin-bottom: 16px;
     }
@@ -353,20 +360,20 @@
       padding: 20px 22px;
       border: 1px solid var(--line);
       border-radius: 14px;
-      background: rgba(244,239,232,0.02);
+      background: rgba(14, 18, 26, 0.72);
       text-align: left;
     }
     .step-num {
       width: 48px;
       height: 48px;
-      border-radius: 12px;
+      border-radius: 8px;
       display: grid;
       place-items: center;
       font-family: var(--display);
       font-weight: 700;
       font-size: 18px;
-      background: rgba(139,74,52,0.28);
-      color: #f0c9a8;
+      background: var(--cta-soft);
+      color: var(--accent);
     }
     .step h3 { font-size: 16px; margin-bottom: 4px; }
     .step p { color: var(--muted); font-size: 14px; }
@@ -454,13 +461,13 @@
     .guide-item {
       display: block;
       padding: 24px;
-      border-radius: 16px;
-      border: 1px solid var(--line);
-      background: rgba(244,239,232,0.02);
+      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+      background: rgba(14, 18, 26, 0.72);
       transition: border-color 160ms ease, transform 160ms ease;
     }
     .guide-item:hover {
-      border-color: var(--line-strong);
+      border-color: rgba(91, 140, 255, 0.45);
       transform: translateY(-2px);
     }
     .guide-item .kicker {
@@ -474,7 +481,7 @@
     .guide-item h3 { font-size: 18px; margin-bottom: 8px; }
     .guide-item p { color: var(--muted); font-size: 14px; margin-bottom: 14px; }
     .guide-item .more {
-      color: #f0c9a8;
+      color: var(--accent);
       font-size: 14px;
       font-weight: 600;
     }
@@ -487,9 +494,9 @@
     }
     .log {
       padding: 18px 20px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(244,239,232,0.02);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      background: rgba(14, 18, 26, 0.72);
       text-align: left;
     }
     .log-top {
@@ -506,11 +513,11 @@
     .final-cta {
       text-align: center;
       padding: 72px 24px;
-      border: 1px solid var(--line);
-      border-radius: 24px;
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
       background:
-        radial-gradient(ellipse 60% 80% at 50% 0%, rgba(139,74,52,0.28), transparent 70%),
-        rgba(244,239,232,0.02);
+        radial-gradient(ellipse 60% 80% at 50% 0%, rgba(91, 140, 255, 0.18), transparent 70%),
+        rgba(14, 18, 26, 0.72);
     }
     .final-cta h2 {
       font-family: var(--display);
@@ -553,7 +560,7 @@
         flex-direction: column;
         padding: 12px;
         border-radius: 14px;
-        background: #2a2620;
+        background: #12161e;
         border: 1px solid var(--line);
       }
       .menu-btn { display: inline-flex; }
