@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>使用说明 · Bullmer 验布机软件</title>
+  <meta name="description" content="Bullmer 验布机软件使用说明：开检流程、UI V3 控件、疵点处理、升级排障。" />
+  <meta name="theme-color" content="#23201a" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #23201a;
+      --bg-2: #1a1814;
+      --ink: #f4efe8;
+      --muted: #a39a8f;
+      --line: rgba(244, 239, 232, 0.12);
+      --line-strong: rgba(244, 239, 232, 0.22);
+      --cta: #8b4a34;
+      --cta-hover: #a3563c;
+      --ok: #5ecf8a;
+      --accent: #e8b86d;
+      --font: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --display: "Syne", "Noto Sans SC", sans-serif;
+      --side: 220px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    code {
+      font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+      font-size: 0.92em;
+      color: var(--accent);
+      background: rgba(0,0,0,0.25);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .grid-bg {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image:
+        linear-gradient(rgba(244,239,232,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(244,239,232,0.03) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, #000 10%, transparent 70%);
+    }
+    .nav {
+      position: sticky; top: 0; z-index: 40;
+      backdrop-filter: blur(14px);
+      background: rgba(35,32,26,0.88);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-inner {
+      width: min(100% - 40px, 1120px);
+      margin: 0 auto;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-family: var(--display); font-weight: 700; font-size: 17px;
+    }
+    .brand-mark {
+      width: 24px; height: 24px; border-radius: 7px;
+      background: conic-gradient(from 210deg, #e8b86d, #8b4a34, #5ecf8a, #6ea8ff, #e8b86d);
+      position: relative;
+    }
+    .brand-mark::after {
+      content: ""; position: absolute; inset: 5px; border-radius: 3px; background: var(--bg);
+    }
+    .nav-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      min-height: 38px; padding: 8px 14px; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: background 160ms ease, border-color 160ms ease;
+    }
+    .btn-primary { background: var(--cta); color: #fff; }
+    .btn-primary:hover { background: var(--cta-hover); }
+    .btn-ghost { border: 1px solid var(--line-strong); }
+    .btn-ghost:hover { background: rgba(244,239,232,0.06); }
+
+    .layout {
+      position: relative; z-index: 1;
+      width: min(100% - 40px, 1120px);
+      margin: 0 auto;
+      padding: 36px 0 72px;
+      display: grid;
+      grid-template-columns: var(--side) minmax(0, 1fr);
+      gap: 36px;
+      align-items: start;
+    }
+    .side {
+      position: sticky; top: 84px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(0,0,0,0.18);
+    }
+    .side a {
+      display: block;
+      padding: 10px 12px;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .side a:hover, .side a.active {
+      color: var(--ink);
+      background: rgba(244,239,232,0.06);
+    }
+    .side .group {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(163,154,143,0.7);
+      padding-left: 12px;
+      margin-bottom: 4px;
+    }
+
+    .doc h1 {
+      font-family: var(--display);
+      font-size: clamp(30px, 5vw, 42px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 12px;
+    }
+    .doc .lead { color: var(--muted); font-size: 17px; margin-bottom: 28px; max-width: 46em; }
+    .doc section {
+      padding: 28px 0;
+      border-top: 1px solid var(--line);
+      scroll-margin-top: 88px;
+    }
+    .doc h2 {
+      font-family: var(--display);
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    .doc h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin: 18px 0 8px;
+    }
+    .doc p, .doc li { color: rgba(244,239,232,0.88); max-width: 48em; }
+    .doc p + p { margin-top: 10px; }
+    .doc ul, .doc ol { padding-left: 1.25em; margin: 10px 0; }
+    .doc li { margin: 6px 0; }
+    .doc .muted { color: var(--muted); }
+    .callout {
+      margin: 16px 0;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(232,184,109,0.28);
+      background: rgba(232,184,109,0.08);
+      color: #f0d7ad;
+      font-size: 14px;
+    }
+    .table-wrap { overflow-x: auto; margin: 14px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 520px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: 0.04em; }
+    .kbd {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 5px;
+      border: 1px solid var(--line-strong);
+      background: rgba(0,0,0,0.25);
+      font-size: 12px;
+      font-family: ui-monospace, Consolas, monospace;
+    }
+
+    footer {
+      position: relative; z-index: 1;
+      border-top: 1px solid var(--line);
+      padding: 28px 0 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .footer-inner {
+      width: min(100% - 40px, 1120px);
+      margin: 0 auto;
+      display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    }
+
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+      .side { position: static; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+      .side .group { grid-column: 1 / -1; border: 0; margin: 8px 0 0; padding-top: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="./index.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        Bullmer
+      </a>
+      <div class="nav-actions">
+        <a class="btn btn-ghost" href="./index.html">首页</a>
+        <a class="btn btn-primary" href="./spacex-main.html">在线测试</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="side" aria-label="目录">
+      <a href="#overview">概述</a>
+      <div class="group">操作</div>
+      <a href="#daily">开检与完成</a>
+      <a href="#ui-v3">UI V3 控件</a>
+      <a href="#defects">疵点处理</a>
+      <div class="group">运维</div>
+      <a href="#devices">设备联调</a>
+      <a href="#upgrade">升级排障</a>
+      <a href="#faq">常见问题</a>
+    </aside>
+
+    <article class="doc">
+      <h1>使用说明</h1>
+      <p class="lead">面向验布班组与现场工程师：从启动软件到完成一匹布的标准操作，以及 CustomUIV3 界面与常见排障要点。</p>
+
+      <section id="overview">
+        <h2>概述</h2>
+        <p>Bullmer 验布机软件（BullmerFabricScanner）运行于 Windows，负责相机采图、AI 疵点检测、PLC/灯带贴标、检验单与 ERP/报告输出。主界面推荐使用 CustomUIV3（SpaceX Ops Console 风格）。</p>
+        <ul>
+          <li><strong>桌面端：</strong>安装包发布于 GitHub <code>kkk-bfs/bfs</code> Releases。</li>
+          <li><strong>在线测试：</strong>本站 <a href="./spacex-main.html" style="color:var(--accent);text-decoration:underline">spacex-main.html</a> 提供 UI 静态预览，不连接真实机台。</li>
+          <li><strong>帮助页：</strong>软件内「帮助」可改大量系统参数；非中文界面可能隐藏帮助入口。</li>
+        </ul>
+      </section>
+
+      <section id="daily">
+        <h2>开检与完成</h2>
+        <h3>1. 启动前检查</h3>
+        <ul>
+          <li>相机网口/USB、PLC、光源、编码器接线正常。</li>
+          <li>确认机型参数 <code>MachineProject</code> 与现场一致（V1 / V1Sp / Dual 等）。</li>
+          <li>首次开机建议以管理员权限运行，避免驱动与共享内存权限问题。</li>
+        </ul>
+        <h3>2. 登录与建单</h3>
+        <ol>
+          <li>顶栏点击登录，选择检验员（管理员可进调试入口）。</li>
+          <li>底栏「新建」创建检验单，填写/扫描缸号、卷号、品名等。</li>
+          <li>核对毛/净幅宽、目标米数；需要时打开净幅宽测量（须已开检且机台停稳）。</li>
+        </ol>
+        <h3>3. 启动验布</h3>
+        <ol>
+          <li>放好布头，确认布边检测与光源亮度正常。</li>
+          <li>点击底栏「启动」。布面滚动后，关注贴标线、疵点列表与报警芯片。</li>
+          <li>运行中可用视图开关条隐藏地图/列表，或进入全屏极简模式。</li>
+        </ol>
+        <h3>4. 完成</h3>
+        <ol>
+          <li>到米或人工结束时点「完成」，确认弹窗。</li>
+          <li>系统写入检验结果并可按工厂配置上传 ERP / 出报告。</li>
+          <li>换卷后重复建单或选择历史检验单继续。</li>
+        </ol>
+        <div class="callout">贴标或疵点编辑相关弹窗打开时，部分操作要求机台处于停止状态。界面会提示「请先停机」类引导。</div>
+      </section>
+
+      <section id="ui-v3">
+        <h2>UI V3 控件说明</h2>
+        <p>V3 将布面铺满舞台，顶栏、底栏、地图、列表、视图开关条叠在布面上（半透明面板）。可在<a href="./spacex-main.html" style="color:var(--accent);text-decoration:underline">在线测试</a>中对照。</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>区域</th><th>作用</th><th>要点</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>顶栏</td>
+                <td>时间、PLC/相机/光源/幅宽传感器/报警、语言、登录、设置、关于、退出</td>
+                <td>设备芯片可点开对应调试/状态弹窗</td>
+              </tr>
+              <tr>
+                <td>疵点地图</td>
+                <td>整匹疵点分布预览</td>
+                <td>极简模式下缩为窄条</td>
+              </tr>
+              <tr>
+                <td>疵点列表</td>
+                <td>条目浏览；新增/编辑</td>
+                <td>编辑/新增需停机</td>
+              </tr>
+              <tr>
+                <td>视图开关条</td>
+                <td>地图、列表、贴标线、布边、检测结果、网格、适配宽高、全屏</td>
+                <td>位于底栏上方居中；左侧 FPS、右侧坐标</td>
+              </tr>
+              <tr>
+                <td>底栏</td>
+                <td>检验单信息、启停/完成、码表（米长/幅宽/速度等）、进度与报警</td>
+                <td>全屏极简时改为紧凑单行</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>全屏极简</h3>
+        <p>点击视图开关条最右侧「全屏」：顶底栏变矮、地图/列表变窄、运行方向指示隐藏，便于盯布。再点一次退出。</p>
+
+        <h3>坐标与帧率</h3>
+        <ul>
+          <li><strong>FPS：</strong>「显示」为界面绘制帧率，「入」为入帧速率。</li>
+          <li><strong>坐标：</strong>鼠标在布面上移动时显示原图像素与物料毫米；移出后隐藏。</li>
+        </ul>
+      </section>
+
+      <section id="defects">
+        <h2>疵点处理</h2>
+        <h3>自动检测</h3>
+        <p>模型检出结果进入检测队列，可在视图开关中单独开关「检测结果」「有效疵点」「过滤疵点」「疵点信息」图层。</p>
+        <h3>人工新增 / 编辑</h3>
+        <ol>
+          <li>机台停止后，在列表点「新增」或「编辑」。</li>
+          <li>选择类型、等级、位置；有触摸笔时可点选布面定位。</li>
+          <li>保存后列表、地图与布面框同步刷新。</li>
+        </ol>
+        <h3>四分制</h3>
+        <p>底栏「百平方码扣分」芯片显示当前累计；可打开四分制详情查看分档与合格线。破损类疵点可配置固定记 4 分。</p>
+      </section>
+
+      <section id="devices">
+        <h2>设备联调</h2>
+        <ul>
+          <li><strong>PLC：</strong>顶栏 PLC 芯片或调试工具查看寄存器、速度、张力；备份/恢复寄存器前请确认机台空闲。</li>
+          <li><strong>相机：</strong>确认采图帧率与分辨率；模拟模式 <code>IsTestMode</code> 可用于无真机联调 UI。</li>
+          <li><strong>光源：</strong>自动调光参数可在帮助页调整；改串口后可能需重开光源或重启。</li>
+          <li><strong>幅宽传感器 / 视觉幅宽：</strong>按工厂开关启用；净幅宽测量有「需已开检」「需停机」前置条件。</li>
+        </ul>
+      </section>
+
+      <section id="upgrade">
+        <h2>升级与排障</h2>
+        <h3>安装包</h3>
+        <ul>
+          <li>主安装包：<code>setup_BullmerFabricScanner_slim_*.exe</code>（GitHub Releases）。</li>
+          <li>亦可仅更新 views / erpinterface 增量包（现场按需）。</li>
+          <li><code>importance=2</code> 的云端版本会在启动时强制下载安装并重启。</li>
+        </ul>
+        <h3>常见问题</h3>
+        <ul>
+          <li><strong>Driver not loaded（MySQL）：</strong>确认安装包含 <code>libmysql.dll</code> 与 <code>sqldrivers/qsqlmysql.dll</code>。</li>
+          <li><strong>OpenCV 缺失：</strong>确认 <code>opencv_world480.dll</code> 已随 slim 包安装。</li>
+          <li><strong>推理闪退：</strong>检查 <code>YoloApi_yolov8_1_EnableReload</code>，默认建议关闭热重载。</li>
+          <li><strong>CEF 页面空白：</strong>确认 locales 与 <code>libcef</code> 资源完整。</li>
+        </ul>
+      </section>
+
+      <section id="faq">
+        <h2>FAQ</h2>
+        <h3>在线测试能控制真机吗？</h3>
+        <p class="muted">不能。静态页仅演示 UI 与弹窗交互，数据为本地演示值。</p>
+        <h3>如何切换语言？</h3>
+        <p class="muted">顶栏语言下拉（中文 / English / 越南语 / 葡萄牙语 / 德语）。部分帮助页仅中文完整。</p>
+        <h3>贴标弹窗时点了启动？</h3>
+        <p class="muted">V3 会尝试消费「启动」为继续验布（跳过关窗），避免误走继续检测逻辑；具体以当前版本行为为准。</p>
+        <div style="margin-top:28px" class="nav-actions">
+          <a class="btn btn-primary" href="./spacex-main.html">打开在线测试</a>
+          <a class="btn btn-ghost" href="./index.html">返回首页</a>
+        </div>
+      </section>
+    </article>
+  </div>
+
+  <footer>
+    <div class="footer-inner">
+      <div>Bullmer 验布机 · 使用说明</div>
+      <div><a href="https://github.com/kkk-bfs/bfs/releases" target="_blank" rel="noopener">Releases</a></div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var links = Array.prototype.slice.call(document.querySelectorAll(".side a[href^='#']"));
+      var sections = links.map(function (a) {
+        return document.querySelector(a.getAttribute("href"));
+      }).filter(Boolean);
+      function sync() {
+        var y = window.scrollY + 100;
+        var cur = sections[0];
+        sections.forEach(function (s) {
+          if (s.offsetTop <= y) cur = s;
+        });
+        links.forEach(function (a) {
+          a.classList.toggle("active", cur && a.getAttribute("href") === "#" + cur.id);
+        });
+      }
+      window.addEventListener("scroll", sync, { passive: true });
+      sync();
+    })();
+  </script>
+</body>
+</html>
