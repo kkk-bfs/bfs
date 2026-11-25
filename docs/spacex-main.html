@@ -104,20 +104,39 @@
       gap: 6px;
     }
 
-    .minimal-mode #SpxHeaderBar .logo { font-size: 12px; }
+    .minimal-mode #SpxHeaderBar .logo { font-size: 12px; font-weight: 700; letter-spacing: 1px; }
     .minimal-mode #SpxHeaderBar .mono { font-size: 11px; }
     .minimal-mode #SpxHeaderBar .lang-select { display: none; }
+    /* 对齐 SpxHeaderBar compact：chip 仅圆点+数值 */
     .minimal-mode #SpxHeaderBar .device-chip {
       max-height: 28px;
-      padding: 4px 8px;
+      padding: 2px 8px 2px 6px;
+      gap: 4px;
       background: rgba(201, 208, 220, 0.04);
     }
-    .minimal-mode #SpxHeaderBar .ghost-btn {
-      padding: 2px 8px;
+    .minimal-mode #SpxHeaderBar .device-chip .label { display: none; }
+    .minimal-mode #SpxHeaderBar .device-chip .value { font-size: 11px; min-width: 0; }
+    /* 右栏：登录/设置/关于/退出全部保留为 32×28 图标钮（对齐 Qt applyRightButtonIcons） */
+    .minimal-mode #SpxHeaderBar .header-right .ghost-btn {
+      width: 32px;
+      min-width: 32px;
+      max-width: 32px;
       min-height: 28px;
-      font-size: 12px;
+      max-height: 28px;
+      padding: 0;
+      font-size: 0;
+      line-height: 0;
+      position: relative;
     }
-    .minimal-mode #SpxHeaderBar .header-right .ghost-btn:nth-child(n+2):nth-child(-n+4) { display: none; }
+    .minimal-mode #SpxHeaderBar .header-right .ghost-btn::before {
+      font-size: 13px;
+      line-height: 28px;
+      color: rgba(220, 226, 236, 0.92);
+    }
+    .minimal-mode #SpxHeaderBar .header-right .ghost-btn[data-popup="login"]::before { content: "👤"; }
+    .minimal-mode #SpxHeaderBar .header-right .ghost-btn[data-popup="systemSettings"]::before { content: "⚙"; }
+    .minimal-mode #SpxHeaderBar .header-right .ghost-btn[data-popup="about"]::before { content: "ⓘ"; }
+    .minimal-mode #SpxHeaderBar .header-right #btnExit::before { content: "✕"; }
 
     .header-left,
     .header-center,
@@ -578,27 +597,101 @@
       border-top-color: rgba(201, 208, 220, 0.1);
       min-height: 75px;
       max-height: 75px;
-      gap: 4px;
+      gap: 8px;
       padding: 2px 6px;
+      align-items: flex-end;
+      justify-content: flex-start; /* 紧凑：左|中(拉伸)|右，无 33% 留白 */
     }
     /* 全屏极简：对齐 SpxBottomHud 紧凑常量
        码表 24 · 左右 chip 28 · 操作钮 40 · 进度 3 · 栏高 75 */
     .minimal-mode #SpxBottomHud .meter {
       min-height: 24px;
+      max-height: 24px;
       padding: 0 4px;
       gap: 2px;
+      flex-direction: row;
+      align-items: center;
+    }
+    .minimal-mode #SpxBottomHud .side-col {
+      align-self: flex-end;
+      justify-content: flex-end;
+    }
+    .minimal-mode #SpxBottomHud .side-col .side-grid {
+      grid-template-columns: repeat(auto-fit, minmax(0, auto));
+      grid-template-rows: auto;
+      grid-auto-flow: column;
+      align-content: end;
+      gap: 4px;
+      height: auto;
+    }
+    /* 左：隐藏颜色/布料/四分（对齐 Qt keep=检验单·缸·卷·毛·净） */
+    .minimal-mode #SpxBottomHud .side-left .chip:has(#fabricColor),
+    .minimal-mode #SpxBottomHud .side-left .chip:has(#fabricName),
+    .minimal-mode #SpxBottomHud .side-left .chip-fp {
+      display: none !important;
     }
     .minimal-mode #SpxBottomHud .side-col .chip {
       min-height: 28px;
+      max-height: 28px;
+      height: 28px;
       padding: 2px 6px;
+      flex-direction: row;
+      width: auto;
+      min-width: 0;
     }
     .minimal-mode #SpxBottomHud .meter .label,
     .minimal-mode #SpxBottomHud .side-col .chip .label { display: none; }
+    /* 右：疵点/记录/放卷 → 28px 图标；CPU/GPU 数值；报警保留标题 */
+    .minimal-mode #SpxBottomHud .side-right .side-grid {
+      direction: ltr;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      width: 100%;
+    }
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="defectSettings"],
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="records"],
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="unwind"] {
+      width: 28px;
+      min-width: 28px;
+      max-width: 28px;
+      padding: 0;
+      font-size: 0;
+      position: relative;
+    }
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="defectSettings"] .chip-value,
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="records"] .chip-value,
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="unwind"] .chip-value {
+      display: none;
+    }
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="defectSettings"]::before,
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="records"]::before,
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="unwind"]::before {
+      font-size: 13px;
+      line-height: 28px;
+      color: rgba(220, 226, 236, 0.92);
+    }
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="defectSettings"]::before { content: "✦"; }
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="records"]::before { content: "☰"; }
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="unwind"]::before { content: "↻"; }
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="cpu"],
+    .minimal-mode #SpxBottomHud .side-right .chip[data-popup="gpu"] {
+      min-width: 48px;
+      width: auto;
+      flex: 0 0 auto;
+    }
     .minimal-mode #SpxBottomHud .alarm-chip {
       min-height: 28px;
+      max-height: 28px;
+      height: 28px;
       padding: 2px 8px;
+      flex: 1 1 auto;
+      min-width: 96px;
     }
-    .minimal-mode #SpxBottomHud .alarm-chip .label { display: inline; }
+    .minimal-mode #SpxBottomHud .alarm-chip .label { display: inline; font-size: 11px; }
     .minimal-mode #SpxBottomHud .chip-value,
     .minimal-mode #SpxBottomHud .meter-value { font-size: 12px; }
     .minimal-mode #SpxBottomHud .run-btn,
@@ -608,10 +701,19 @@
       max-height: 40px;
       padding: 4px 12px;
     }
+    .minimal-mode #SpxBottomHud .ghost-btn.act-new,
+    .minimal-mode #SpxBottomHud .ghost-btn.act-finish { min-width: 108px; }
+    .minimal-mode #SpxBottomHud .run-btn { min-width: 216px; }
     .minimal-mode #SpxBottomHud .progress-wrap { height: 3px; }
     .minimal-mode #SpxBottomHud .progress-text { display: none; }
-    .minimal-mode #SpxBottomHud .center-col { gap: 2px; }
-    .minimal-mode #SpxBottomHud .action-row { gap: 4px; }
+    .minimal-mode #SpxBottomHud .center-col {
+      gap: 2px;
+      align-self: flex-start;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .minimal-mode #SpxBottomHud .action-row { gap: 6px; }
+    .minimal-mode #SpxBottomHud .meter-row { gap: 10px; }
 
     #SpxViewToggleBar {
       position: absolute;
@@ -1644,6 +1746,18 @@
         DetectEdgeGap: "0",
         DetectEdgeROIHeight: "0",
         DetectEdgeThreshold: "0",
+        UI_POPUP_SIZE_LOGIN_W_PCT: 30,
+        UI_POPUP_SIZE_LOGIN_H_PCT: 50,
+        UI_POPUP_SIZE_ABOUT_W_PCT: 40,
+        UI_POPUP_SIZE_ABOUT_H_PCT: 70,
+        UI_POPUP_SIZE_SYSMSG_W_PCT: 50,
+        UI_POPUP_SIZE_SYSMSG_H_PCT: 50,
+        UI_POPUP_SIZE_SHEET_W_PCT: 40,
+        UI_POPUP_SIZE_SHEET_H_PCT: 80,
+        UI_POPUP_SIZE_INFO_W_PCT: 60,
+        UI_POPUP_SIZE_INFO_H_PCT: 60,
+        UI_POPUP_SIZE_SETTINGS_W_PCT: 60,
+        UI_POPUP_SIZE_SETTINGS_H_PCT: 100,
       },
       colorDiff: 0.42,
       weightKg: 18.6,
@@ -1925,24 +2039,53 @@
       return icons[name] || "";
     }
 
-    /** 先定中间内容宽；左右等宽占剩余 67%；另 33% 由 space-between 留空（对齐 Qt） */
+    /** 普通：中间定宽，左右等宽占剩余 67%；紧凑：左右按内容等宽贴边，中间拉伸（对齐 SpxBottomHud） */
     function syncBottomSideWidths(bottom) {
       if (!bottom) bottom = $("SpxBottomHud");
-      if (!bottom || bottom.classList.contains("minimal") || document.body.classList.contains("minimal-mode"))
-        return;
+      if (!bottom) return;
       const left = bottom.querySelector(".side-col.side-left");
       const right = bottom.querySelector(".side-col.side-right");
       const center = bottom.querySelector(".center-col");
       if (!left || !right || !center) return;
 
+      const minimal =
+        !!state.minimalMode ||
+        bottom.classList.contains("minimal") ||
+        document.body.classList.contains("minimal-mode") ||
+        !!document.getElementById("app")?.classList.contains("minimal-mode");
+
       left.style.flex = "0 0 auto";
       right.style.flex = "0 0 auto";
       left.style.width = "";
       right.style.width = "";
-      center.style.flex = "0 0 auto";
-      center.style.width = "auto";
       center.style.minWidth = "";
       center.style.maxWidth = "none";
+
+      if (minimal) {
+        // 紧凑：先测内容再取 max，左右等宽；中间吃剩余
+        center.style.flex = "1 1 auto";
+        center.style.width = "auto";
+        left.style.flex = "0 0 auto";
+        right.style.flex = "0 0 auto";
+        // 强制一次布局再测，避免隐藏 chip 后宽度仍偏大
+        void bottom.offsetWidth;
+        const leftNeed = Math.max(160, Math.ceil(left.scrollWidth || left.offsetWidth || 0));
+        // 右：3×28 图标 + CPU/GPU + 报警最小宽（对齐 Qt syncCompactSideWidths）
+        const rightIconsW = 3 * 28 + 2 * 4;
+        const rightNeed = Math.max(
+          rightIconsW + 4 + 52 + 52 + 4 + 96,
+          Math.ceil(right.scrollWidth || right.offsetWidth || 0)
+        );
+        const sideW = Math.max(leftNeed, rightNeed);
+        left.style.width = `${sideW}px`;
+        right.style.width = `${sideW}px`;
+        left.style.flex = `0 0 ${sideW}px`;
+        right.style.flex = `0 0 ${sideW}px`;
+        return;
+      }
+
+      center.style.flex = "0 0 auto";
+      center.style.width = "auto";
 
       const style = getComputedStyle(bottom);
       const padL = parseFloat(style.paddingLeft) || 0;
@@ -2100,6 +2243,13 @@
         fsBtn.title = t(on ? "exit_fullscreen" : "fullscreen");
         fsBtn.innerHTML = viewIconSvg("fullscreen", on);
       }
+      // 顶栏图标钮悬停提示（文字被 CSS 隐藏）
+      const hdrBtns = document.querySelectorAll("#SpxHeaderBar .header-right .ghost-btn");
+      if (hdrBtns[0]) hdrBtns[0].title = on ? t("login") : "";
+      if (hdrBtns[1]) hdrBtns[1].title = on ? t("settings") : "";
+      if (hdrBtns[2]) hdrBtns[2].title = on ? t("about") : "";
+      if (hdrBtns[3]) hdrBtns[3].title = on ? t("exit") : "";
+      tickClock();
       layoutStageOverlays();
     }
 
@@ -2355,8 +2505,11 @@
 
     function tickClock() {
       const d = new Date();
-      $("clock").textContent =
-        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}  ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      const hhmmss = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      // 全屏极简：仅时分秒（对齐 SpxHeaderBar::onClockTick compact）
+      $("clock").textContent = state.minimalMode
+        ? hhmmss
+        : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}  ${hhmmss}`;
     }
 
     function applyI18n() {
@@ -2880,6 +3033,12 @@
             typeof spxCollectSettingsPayload === "function" ? spxCollectSettingsPayload() : {};
           state.settingsValues = Object.assign({}, state.settingsValues || {}, payload);
           state.settingsLoaded = true;
+          // 弹窗尺寸：同步到 state，供 _place / API 回填路径共用
+          Object.keys(payload).forEach((k) => {
+            if (!k.startsWith("UI_POPUP_SIZE_")) return;
+            const n = Number(payload[k]);
+            if (Number.isFinite(n)) state[k] = Math.max(20, Math.min(100, Math.round(n)));
+          });
           if (payload.CurrentLanguage) {
             state.lang = payload.CurrentLanguage;
             const langEl = $("lang");
