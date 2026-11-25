@@ -64,30 +64,33 @@
     "erpEditSheet",
   ]);
 
-  /** 设置弹窗 → quick + SETTINGS → 60%×100% 中间高 */
+  /** 设置弹窗 → quick + SETTINGS → 60%×100% 中间高（含放卷 PLC） */
   const SETTINGS_KEYS = new Set([
     "debug",
     "systemSettings",
     "defectSettings",
+    "unwind",
   ]);
 
   /** 兼容旧名：机台提示已并入 FORM_KEYS */
   const INFO_KEYS = FORM_KEYS;
   const LOGIN_SIZE_KEYS = new Set(["login"]);
 
-  /** 定时 refresh 会冲掉输入与 tab，这些弹窗跳过整页重建 */
+  /** 定时 refresh 会冲掉输入与 tab / 滚动位置，这些弹窗跳过整页重建 */
   const NO_LIVE_REFRESH_KEYS = new Set([
     "login",
+    "about",
     "systemSettings",
     "erpNewSheet",
     "erpEditSheet",
-    "fourPoints",
+    "weight",
     "defectAdd",
     "defectEdit",
     "defectSettings",
     "records",
     "debug",
     "plc",
+    "camera", // 含曝光输入；整页 refresh 会打断操作
     "light",
     "widthSensor",
     "artificalAddDefect",
@@ -411,22 +414,31 @@
       </div>`;
   }
 
+  function escapeAboutText(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   function buildAbout(ctx) {
-    // 字段/按钮对齐 CustomUI/component/About（refreshVersionText + admin 工具行）
+    // 字段/按钮对齐 CustomUI/component/About（数据来自 /about/info + 原生快照）
     const zh = ctx.lang === "zh-CN";
     const info = (ctx.about && typeof ctx.about === "object") ? ctx.about : {};
-    const version = info.version || "1.26.1119.232927";
-    const buildTime = info.buildTime || "2026-11-19 23:29:27";
-    const gitInfo = info.gitInfo || "v2-stable_60de8481";
-    const machineProject = info.machineProject != null ? String(info.machineProject) : "0";
-    const machineSerial = info.machineSerial || "BM-FS-2026-001";
-    const erpFactory = info.erpFactory || "default";
-    const installDate = info.installDate || "2026-11-01";
+    const dash = "-";
+    const version = info.version || dash;
+    const buildTime = info.buildTime || dash;
+    const gitInfo = info.gitInfo || dash;
+    const machineProject = info.machineProject != null ? String(info.machineProject) : dash;
+    const machineSerial = info.machineSerial || dash;
+    const erpFactory = info.erpFactory || dash;
+    const installDate = info.installDate || dash;
     const testMode = Number(info.testMode || 0);
-    const isAdmin = info.isAdmin !== false;
-    const notes = info.notes || (zh
-      ? "1.26.1119 — 不停机贴标/复核、自动停机、双面贴标、自动调光与 ERP 接口等合并更新。"
-      : "1.26.1119 — Non-stop labelling/review, auto-stop, doubleside, auto light, ERP merges.");
+    const isAdmin = !!info.isAdmin;
+    const notesRaw = String(info.notes || "").trim();
+    const notes = notesRaw
+      || (zh ? "暂无更新说明。" : "No release notes available.");
 
     let testBanner = "";
     if (testMode > 0) {
@@ -438,42 +450,48 @@
       testBanner = `<div class="spx-about-test">!!! ${zh ? "测试模式" : "TEST MODE"} ${testMode}（${modeText}）!!!</div>`;
     }
 
+    // 更新说明占满剩余高度、仅区内滚动；外层 .spx-about 不滚动
     const notesBlock = isAdmin
-      ? `${section(zh ? "更新说明" : "Release Notes")}
-      <div class="spx-about-notes">${notes}</div>`
-      : "";
+      ? `<div class="spx-about-notes-panel">
+        ${section(zh ? "更新说明" : "Release Notes")}
+        <div class="spx-about-notes">${escapeAboutText(notes)}</div>
+      </div>`
+      : `<div class="spx-about-notes-panel is-empty"></div>`;
 
+    // 按钮序：先非管理员常用（主页/日志），再管理员工具
     const homeBtn = ghostBtn(zh ? "打开主页" : "Open Home", 'data-act="about-open-home"');
     const logBtn = ghostBtn(zh ? "打开日志" : "Open Log", 'data-act="about-log-export"');
     const actions = isAdmin
-      ? `${section(zh ? "管理工具" : "Admin Tools")}
-      <div class="spx-about-btns">
-        ${ghostBtn(zh ? "检查更新" : "Check Update", 'data-act="about-check-update"')}
-        ${ghostBtn(zh ? "提交Bug" : "Report Bug", 'data-act="about-report-bug"')}
-        ${ghostBtn(zh ? "导出日志" : "Export Log", 'data-act="about-log-export"')}
-      </div>
-      <div class="spx-about-btns">
-        ${ghostBtn(zh ? "执行统计" : "Run Stats", 'data-act="about-stat"')}
-        ${ghostBtn(zh ? "上传数据" : "Upload Data", 'data-act="about-upload"')}
-        ${ghostBtn(zh ? "PLC调试" : "PLC Debug", 'data-act="about-plc-debug"')}
-      </div>
-      <div class="spx-about-btns">
-        ${homeBtn}
-        ${ghostBtn(zh ? "ERP厂家" : "ERP Folder", 'data-act="about-erp-factory"')}
+      ? `<div class="spx-about-footer">
+        ${section(zh ? "管理工具" : "Admin Tools")}
+        <div class="spx-about-btns spx-about-btns-row">
+          ${homeBtn}
+          ${logBtn}
+          ${ghostBtn(zh ? "检查更新" : "Check Update", 'data-act="about-check-update"')}
+          ${ghostBtn(zh ? "提交Bug" : "Report Bug", 'data-act="about-report-bug"')}
+          ${ghostBtn(zh ? "执行统计" : "Run Stats", 'data-act="about-stat"')}
+          ${ghostBtn(zh ? "上传数据" : "Upload Data", 'data-act="about-upload"')}
+          ${ghostBtn(zh ? "PLC调试" : "PLC Debug", 'data-act="about-plc-debug"')}
+          ${ghostBtn(zh ? "ERP厂家" : "ERP Folder", 'data-act="about-erp-factory"')}
+        </div>
       </div>`
-      : `${section(zh ? "快捷入口" : "Quick Links")}
-      <div class="spx-about-btns">${homeBtn}${logBtn}</div>`;
+      : `<div class="spx-about-footer">
+        ${section(zh ? "快捷入口" : "Quick Links")}
+        <div class="spx-about-btns">${homeBtn}${logBtn}</div>
+      </div>`;
 
     return `
       <div class="spx-about">
-        ${section(zh ? "版本信息" : "Version Info")}
-        ${testBanner}
-        ${kv("Version", version)}
-        ${kv("BuildTime", `${buildTime}_${gitInfo}`)}
-        ${kv("MachineProject", machineProject)}
-        ${kv("MachineSerial", machineSerial)}
-        ${kv("ERPFactory", erpFactory)}
-        ${kv("InstallDate", installDate)}
+        <div class="spx-about-head">
+          ${section(zh ? "版本信息" : "Version Info")}
+          ${testBanner}
+          ${kv("Version", escapeAboutText(version))}
+          ${kv("BuildTime", escapeAboutText(`${buildTime}_${gitInfo}`))}
+          ${kv("MachineProject", escapeAboutText(machineProject))}
+          ${kv("MachineSerial", escapeAboutText(machineSerial))}
+          ${kv("ERPFactory", escapeAboutText(erpFactory))}
+          ${kv("InstallDate", escapeAboutText(installDate))}
+        </div>
         ${notesBlock}
         ${actions}
       </div>`;
@@ -620,13 +638,29 @@
     </div>`;
   }
 
-  function plcParam(id, label, value, unit, applyText) {
+  /** opts.step>0 时渲染 − / 输入 / +，点步进后立刻写入；单位独立成列避免挡数字 */
+  function plcParam(id, label, value, unit, applyText, opts) {
+    const step = opts && Number(opts.step) > 0 ? Number(opts.step) : 0;
+    const hasUnit = !!unit;
+    // 有步进时单位外置占位，保证各行 −值+/单位/写入列对齐；无步进单位叠在输入框右侧
+    const inlineUnit = !step && hasUnit ? `<span class="unit-suffix">${unit}</span>` : "";
+    const inputBox = `<div class="spx-plct-unit">
+        <input type="text" inputmode="decimal" id="${id}" class="spx-plct-inp" data-osk="1" value="${value}" />
+        ${inlineUnit}
+      </div>`;
+    if (step > 0) {
+      return `<div class="spx-plct-form-row param has-step${hasUnit ? " has-unit" : ""}">
+      <label class="spx-plct-form-k" for="${id}">${label}</label>
+      <button type="button" class="ghost-btn compact spx-plct-nudge" data-act="plct-nudge" data-field="${id}" data-delta="-1" data-step="${step}" aria-label="-">−</button>
+      ${inputBox}
+      <button type="button" class="ghost-btn compact spx-plct-nudge" data-act="plct-nudge" data-field="${id}" data-delta="1" data-step="${step}" aria-label="+">+</button>
+      <span class="spx-plct-unit-col">${hasUnit ? unit : ""}</span>
+      <button type="button" class="ghost-btn compact spx-plct-apply" data-act="plct-apply" data-field="${id}">${applyText || "↵"}</button>
+    </div>`;
+    }
     return `<div class="spx-plct-form-row param">
       <label class="spx-plct-form-k" for="${id}">${label}</label>
-      <div class="spx-plct-unit">
-        <input type="text" inputmode="decimal" id="${id}" class="spx-plct-inp" data-osk="1" value="${value}" />
-        ${unit ? `<span class="unit-suffix">${unit}</span>` : ""}
-      </div>
+      <div class="spx-plct-ctrl">${inputBox}</div>
       <button type="button" class="ghost-btn compact spx-plct-apply" data-act="plct-apply" data-field="${id}">${applyText || "↵"}</button>
     </div>`;
   }
@@ -674,14 +708,16 @@
     const st = (ctx.state && ctx.state.plc) || {};
     const s = metricState(ctx.state);
     const connected = !!st.is_connected;
-    const len = fmtPlc(st.fabric_length != null ? st.fabric_length : s.lengthM, 2);
-    const spd = fmtPlc(st.servo_speed != null ? st.servo_speed : s.speed, 2);
+    // PLC 面板展示内部 SI；metricState 已换算显示单位，回退用 lengthMeters/speedMPerMin
+    const lenRaw = st.fabric_length != null ? st.fabric_length : (ctx.state && ctx.state.lengthM != null ? ctx.state.lengthM : s.lengthMeters);
+    const spdRaw = st.servo_speed != null ? st.servo_speed : (ctx.state && ctx.state.speed != null ? ctx.state.speed : s.speedMPerMin);
+    const len = fmtPlc(lenRaw, 2);
+    const spd = fmtPlc(spdRaw, 2);
     const alarm = plcAlarmText(st, zh);
     const breadth = st.plc_fabric_width != null ? st.plc_fabric_width : st.fabric_width;
     const labelDone = Number(st.label_finish_stop) !== 0;
     const reverse = !!st.shaft_rotation_reverse;
     const modeText = reverse ? (zh ? "反转" : "Reverse") : (zh ? "正转" : "Forward");
-    const lang = ctx.lang || (zh ? "zh-CN" : "en-US");
 
     const livePanel = `
       <section class="spx-plct-panel live">
@@ -725,9 +761,11 @@
       <section class="spx-plct-panel label">
         <div class="spx-plct-heading">${zh ? "贴标测试" : "Labelling Test"}</div>
         <div class="spx-plct-panel-body">
-          ${plcRoRow("lblX", zh ? "X坐标" : "X", fmtPlc(st.current_x, "int"))}
-          ${plcRoRow("lblY", zh ? "Y坐标" : "Y", fmtPlc(st.current_y, "int"))}
-          ${plcRoRow("lblZ", zh ? "Z坐标" : "Z", fmtPlc(st.current_z, "int"))}
+          <div class="spx-plct-xyz" aria-label="${zh ? "当前坐标" : "Current XYZ"}">
+            ${plcRoRow("lblX", zh ? "X坐标" : "X", fmtPlc(st.current_x, "int"))}
+            ${plcRoRow("lblY", zh ? "Y坐标" : "Y", fmtPlc(st.current_y, "int"))}
+            ${plcRoRow("lblZ", zh ? "Z坐标" : "Z", fmtPlc(st.current_z, "int"))}
+          </div>
           ${plcParam("plctHalt", zh ? "预设停机坐标" : "Halt coordinate", fmtPlc(st.label_y, "int"), "", applyTxt)}
           ${plcParam("plctLblX", zh ? "贴标X坐标" : "Labelling X", fmtPlc(st.label_x, "int"), "", applyTxt)}
           <div class="spx-plct-form-row radio">
@@ -738,27 +776,51 @@
             </div>
           </div>
           <div class="spx-plct-labelling-actions">
+            <button type="button" class="ghost-btn compact ok" data-act="plct-label-test">${zh ? "测试" : "Test"}</button>
             ${plcCmd(zh ? "贴标" : "Labelling", "Labelling", "ok")}
             <button type="button" class="ghost-btn compact" data-act="plct-movex">${zh ? "移动 X" : "Move X"}</button>
           </div>
         </div>
       </section>` : "";
 
+    const sysTabs = [
+      { key: "quick", zh: "常用", en: "Quick" },
+      { key: "systemParameters", zh: "系统参数", en: "System" },
+      { key: "systemParameters2", zh: "系统参数2", en: "System 2" },
+      { key: "tensionParameters", zh: "张力参数", en: "Tension" },
+      { key: "manualControl", zh: "收放卷点动", en: "Jog" },
+    ];
+    const sysTabBtns = sysTabs
+      .map(
+        (b, i) =>
+          `<button type="button" class="ghost-btn compact spx-plct-sys-tab${i === 0 ? " active" : ""}" data-act="plct-sys-tab" data-tab="${b.key}">${zh ? b.zh : b.en}</button>`
+      )
+      .join("");
     const systemPanel = isAdmin ? `
-      <section class="spx-plct-panel system">
+      <section class="spx-plct-panel system" id="popPlcSysPanel" data-sys-tab="quick">
         <div class="spx-plct-heading">${zh ? "系统参数" : "System Parameter"}</div>
+        <div class="spx-plct-sys-tabs" role="tablist" aria-label="${zh ? "系统参数分组" : "System tabs"}">${sysTabBtns}</div>
         <div class="spx-plct-panel-body system-body">
-          <div class="spx-plct-system-params">
-            ${plcParam("plctTenCoef", zh ? "张力系数" : "Tension coef", fmtPlc(st.tension_factor, 3), "", applyTxt)}
-            ${plcParam("plctUnreel", zh ? "进卷/放卷系数" : "Unreel/roll coef", fmtPlc(st.roll_unreel_factor, 3), "", applyTxt)}
-            ${plcParam("plctTenDiff", zh ? "叠布电机速度系数" : "Stack coef", fmtPlc(st.differential_tension, 3), "", applyTxt)}
-            ${plcParam("plctRollDiff", zh ? "收卷/摆布差速" : "Roll/plait diff", fmtPlc(st.differential_roll, 3), "[m/s]", applyTxt)}
-            ${plcParam("plctDrop", zh ? "贴标机下降高度" : "Drop height", fmtPlc(st.labelling_descent_height, 3), "[m/s]", applyTxt)}
+          <div class="spx-plct-sys-pane" data-pane="quick">
+            <div class="spx-plct-system-main">
+              <div class="spx-plct-system-params">
+                ${plcParam("plctTenCoef", zh ? "张力系数" : "Tension coef", fmtPlc(st.tension_factor, 3), "", applyTxt, { step: 0.1 })}
+                ${plcParam("plctUnreel", zh ? "进卷/放卷系数" : "Unreel/roll coef", fmtPlc(st.roll_unreel_factor, 3), "", applyTxt, { step: 0.1 })}
+                ${plcParam("plctTenDiff", zh ? "叠布电机速度系数" : "Stack coef", fmtPlc(st.differential_tension, 3), "", applyTxt, { step: 0.1 })}
+                ${plcParam("plctRollDiff", zh ? "收卷/摆布差速" : "Roll/plait diff", fmtPlc(st.differential_roll, 3), "[m/s]", applyTxt, { step: 0.1 })}
+                ${plcParam("plctDrop", zh ? "贴标机下降高度" : "Drop height", fmtPlc(st.labelling_descent_height, 3), "[m/s]", applyTxt, { step: 0.1 })}
+              </div>
+              <div class="spx-plct-system-switches">
+                ${plcSwitch("plctBuzzer", zh ? "蜂鸣器" : "Buzzer", "OpenBuzzer", "CloseBuzzer", false)}
+                ${plcSwitch("plctShield", zh ? "屏蔽检测" : "Shield detection", "OpenShieldDetection", "CloseShieldDetection", false)}
+              </div>
+            </div>
           </div>
-          <div class="spx-plct-system-switches">
-            ${plcSwitch("plctBuzzer", zh ? "蜂鸣器" : "Buzzer", "OpenBuzzer", "CloseBuzzer", false)}
-            ${plcSwitch("plctShield", zh ? "屏蔽检测" : "Shield detection", "OpenShieldDetection", "CloseShieldDetection", false)}
-          </div>
+          <div class="spx-plct-sys-pane" data-pane="systemParameters" hidden></div>
+          <div class="spx-plct-sys-pane" data-pane="systemParameters2" hidden></div>
+          <div class="spx-plct-sys-pane" data-pane="tensionParameters" hidden></div>
+          <div class="spx-plct-sys-pane" data-pane="manualControl" hidden></div>
+          <div class="spx-plct-sys-msg" id="spxPlcSysMsg"></div>
         </div>
       </section>` : "";
 
@@ -770,9 +832,7 @@
             <span>${zh ? "IO状态" : "IO State"}</span>
             <button type="button" class="ghost-btn compact" data-act="plct-io-close">×</button>
           </div>
-          <div class="spx-plct-sub-body io">
-            <iframe id="popPlcIoFrame" title="${zh ? "IO状态" : "IO State"}" src="about:blank" data-src="/newviews/plcstatus?hideNavbar=1&amp;theme=spx&amp;lang=${encodeURIComponent(lang)}"></iframe>
-          </div>
+          <div class="spx-plct-sub-body io" id="popPlcIoHost"></div>
         </div>
       </div>`;
 
@@ -876,27 +936,188 @@
       </div>`;
   }
 
+  function cameraFamilyOf(type) {
+    const t = String(type || "").toLowerCase();
+    if (t.indexOf("ikap") >= 0) return "ikap";
+    if (t.indexOf("hk") >= 0 || t.indexOf("mvs") >= 0) return "hk";
+    if (t.indexOf("luster") >= 0) return "luster";
+    if (t.indexOf("sim") >= 0) return "sim";
+    if (t.indexOf("dalsa") >= 0) return "dalsa";
+    return "generic";
+  }
+
+  function cameraFamilyLabel(family, type, zh) {
+    if (family === "ikap") return "IKap";
+    if (family === "hk") return zh ? "海康" : "Hikvision";
+    if (family === "luster") return "Luster";
+    if (family === "sim") return zh ? "模拟" : "Sim";
+    if (family === "dalsa") return "DALSA";
+    return type || "Camera";
+  }
+
+  function cameraCanSetExposure(c) {
+    const family = (c && c.family) || cameraFamilyOf(c && c.type);
+    if (c && c.canSetExposure === true) return true;
+    if (c && c.canSetExposure === false) return false;
+    return family !== "hk";
+  }
+
   function buildCamera(ctx) {
     const zh = ctx.lang === "zh-CN";
+    const isAdmin = !!(ctx.about && ctx.about.isAdmin);
     const cams = Array.isArray(ctx.state && ctx.state.cameras) ? ctx.state.cameras : [];
-    const meta = cams.length
-      ? cams.map((c) => `${c.name || c.type || "cam"}`).join(" · ")
-      : "—";
     const frames = ctx.state && ctx.state.camFrames != null ? ctx.state.camFrames : "—";
+    const esc = (s) =>
+      String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;");
+    if (!cams.length) {
+      return `
+        <div class="spx-cam-layout">
+          <div class="spx-cam-empty">${zh ? "未检测到相机设备" : "No camera devices"}</div>
+          <div class="spx-cam-statbar">
+            <span class="spx-cam-chip"><b>${zh ? "帧数" : "Frames"}</b> <span id="popCamFrames">${frames}</span></span>
+          </div>
+          <div class="spx-actions">${ghostBtn(zh ? "刷新" : "Refresh", 'data-act="cam-refresh"')}</div>
+        </div>`;
+    }
+
+    const tabNameRaw = String((ctx.state && ctx.state.selectedCamName) || "");
+    const activeName = cams.some((c) => String(c.name) === tabNameRaw)
+      ? tabNameRaw
+      : String(cams[0].name || "");
+
+    const tabs = cams
+      .map((c) => {
+        const name = String(c.name || "");
+        const family = c.family || cameraFamilyOf(c.type);
+        const on = name === activeName;
+        const lab = cameraFamilyLabel(family, c.type, zh);
+        return `<button type="button" class="spx-cam-tab${on ? " active" : ""}" data-act="cam-tab" data-cam="${esc(name)}" role="tab" aria-selected="${on ? "true" : "false"}"><span class="spx-cam-tab-name">${esc(name)}</span><span class="spx-cam-tab-fam">${esc(lab)}</span></button>`;
+      })
+      .join("");
+
+    const panes = cams
+      .map((c) => {
+        const name = String(c.name || "");
+        const type = String(c.type || "—");
+        const family = c.family || cameraFamilyOf(type);
+        const on = name === activeName;
+        const models = Array.isArray(c.models) ? c.models.filter(Boolean) : [];
+        const serials = Array.isArray(c.serials) ? c.serials.filter(Boolean) : [];
+        const ips = Array.isArray(c.ips) ? c.ips.filter(Boolean) : [];
+        const jsonPath = String(c.settingsJsonRelativePath || "");
+        const exp = Number(c.exposure) > 0 ? Number(c.exposure) : 50;
+        const res =
+          c.bufferWidth > 0 && c.bufferHeight > 0
+            ? `${c.bufferWidth}×${c.bufferHeight}`
+            : "—";
+        const cnt = c.cameraCount != null ? c.cameraCount : models.length || 1;
+        const grab = c.isGrab ? (zh ? "采集中" : "Grabbing") : zh ? "空闲" : "Idle";
+        const canExp = cameraCanSetExposure(c);
+        const canEdit = canExp && isAdmin;
+        const famLab = cameraFamilyLabel(family, type, zh);
+        const grabTone = c.isGrab ? "ok" : "idle";
+
+        // 2×N 信息格：上标签下数值，避免「驱动模拟数量1…」挤成一行
+        const cells = [
+          { k: zh ? "驱动" : "Driver", v: famLab, tone: family === "sim" ? "sim" : "fam" },
+          { k: zh ? "数量" : "Count", v: String(cnt) },
+          { k: zh ? "分辨率" : "Size", v: res, muted: res === "—" },
+          {
+            k: zh ? "状态" : "State",
+            v: grab,
+            tone: grabTone,
+            attr: `data-cam-grab="${esc(name)}"`,
+          },
+        ];
+        if (family === "hk" || family === "luster") {
+          if (serials.length) cells.push({ k: "SN", v: serials.slice(0, 2).join(" / "), mono: true });
+          if (ips.length) cells.push({ k: "IP", v: ips.slice(0, 2).join(" / "), mono: true });
+        }
+        if ((family === "ikap" || family === "hk") && jsonPath) {
+          cells.push({
+            k: "JSON",
+            v: jsonPath.split("/").pop() || jsonPath,
+            mono: true,
+            title: jsonPath,
+          });
+        }
+
+        const statGrid = `<div class="spx-cam-statgrid" data-cols="${Math.min(4, cells.length)}">${cells
+          .map((cell) => {
+            const cls = ["spx-cam-stat"];
+            if (cell.tone) cls.push("tone-" + cell.tone);
+            if (cell.muted) cls.push("is-muted");
+            if (cell.mono) cls.push("is-mono");
+            const title = cell.title ? ` title="${esc(cell.title)}"` : "";
+            const extra = cell.attr ? " " + cell.attr : "";
+            return `<div class="${cls.join(" ")}"${title}${extra}><span class="spx-cam-stat-k">${esc(cell.k)}</span><span class="spx-cam-stat-v">${esc(cell.v)}</span></div>`;
+          })
+          .join("")}</div>`;
+
+        const modelBlock = models.length
+          ? `<div class="spx-cam-models"><span class="spx-k">${zh ? "型号" : "Model"}</span><div class="spx-cam-model-list">${models
+              .map((m) => `<span class="spx-cam-model-tag" title="${esc(m)}">${esc(m)}</span>`)
+              .join("")}</div></div>`
+          : "";
+
+        let paramBlock = "";
+        if (canEdit) {
+          paramBlock = `
+            <div class="spx-cam-param">
+              <div class="spx-cam-exp-row">
+                <label class="spx-field spx-cam-exp-field"><span class="spx-k">${zh ? "曝光 (us)" : "Exposure (us)"}</span>
+                  <input class="popCamExp" data-cam="${esc(name)}" type="number" min="1" max="20000" value="${esc(String(exp))}" />
+                </label>
+                ${ghostBtn(zh ? "保存" : "Save", 'data-act="cam-save"')}
+              </div>
+            </div>`;
+        } else if (canExp && !isAdmin) {
+          paramBlock = `
+            <div class="spx-cam-param is-readonly">
+              <div class="spx-kv"><span class="spx-k">${zh ? "曝光 (us)" : "Exposure (us)"}</span><span class="spx-v">${esc(String(exp > 0 ? exp : "—"))}</span></div>
+              <div class="spx-cam-hint">${zh ? "非管理员仅可查看，修改参数请先登录管理员" : "View only — admin login required to edit"}</div>
+            </div>`;
+        } else {
+          paramBlock = `
+            <div class="spx-cam-param is-readonly">
+              <div class="spx-cam-hint">${
+                zh
+                  ? "本类型不支持弹窗改曝光 → 调试·相机 / " + (jsonPath ? jsonPath.split("/").pop() : "JSON")
+                  : "No popup exposure → Debug·Camera / JSON"
+              }</div>
+            </div>`;
+        }
+
+        return `
+          <div class="spx-cam-pane" data-cam-pane="${esc(name)}" data-cam-family="${esc(family)}" ${on ? "" : "hidden"}>
+            ${statGrid}
+            ${modelBlock}
+            ${paramBlock}
+          </div>`;
+      })
+      .join("");
+
     return `
-      ${section(zh ? "相机预览" : "Camera Preview")}
-      <div class="spx-cam-preview" id="popCamPreview">
-        <div class="spx-cam-meta">${meta} · frames ${frames}</div>
-      </div>
-      <div class="spx-actions">
-        ${ghostBtn(zh ? "刷新图像" : "Refresh", 'data-act="cam-refresh"')}
-        ${ghostBtn(zh ? "自动刷新" : "Auto", 'data-act="cam-auto"')}
-      </div>
-      ${section(zh ? "参数" : "Params")}
-      ${field(zh ? "曝光" : "Exposure", `<input id="popCamExp" type="number" min="10" max="20000" value="1200" />`)}
-      ${field(zh ? "增益" : "Gain", `<input id="popCamGain" type="number" min="0" max="24" step="0.1" value="1.5" />`)}
-      <label class="spx-check"><input type="checkbox" checked /> ${zh ? "显示像素信息" : "Show pixel info"}</label>
-      <div class="spx-actions">${ghostBtn(zh ? "保存" : "Save", 'data-act="cam-save"')}</div>`;
+      <div class="spx-cam-layout">
+        <div class="spx-cam-tabs" role="tablist" aria-label="${zh ? "相机" : "Cameras"}">${tabs}</div>
+        <div class="spx-cam-preview-wrap">
+          <div class="spx-cam-preview" id="popCamPreview" data-cam="${esc(activeName)}">
+            <img class="spx-cam-img" id="popCamImg" alt="" hidden />
+            <div class="spx-cam-meta" id="popCamMeta">
+              <span id="popCamMetaName">${esc(activeName)}</span>
+              · frames <span id="popCamFrames">${esc(String(frames))}</span>
+            </div>
+          </div>
+          <div class="spx-cam-preview-actions">
+            ${ghostBtn(zh ? "刷新" : "Refresh", 'data-act="cam-refresh"')}
+            ${ghostBtn(zh ? "自动" : "Auto", 'data-act="cam-auto" id="popCamAutoBtn"')}
+          </div>
+        </div>
+        <div class="spx-cam-panes">${panes}</div>
+      </div>`;
   }
 
   function buildLight(ctx) {
@@ -907,9 +1128,13 @@
       : [
           { id: 1, name: zh ? "前灯" : "Front", v: Number(ctx.state && ctx.state.lightBrightness) || 180 },
           { id: 2, name: zh ? "后灯" : "Back", v: 160 },
-          { id: 3, name: zh ? "侧灯 A" : "Side A", v: 140 },
-          { id: 4, name: zh ? "侧灯 B" : "Side B", v: 140 },
         ];
+    const tabIdRaw = Number(ctx.state && ctx.state.lightTabId);
+    const activeId = lights.some((L) => Number(L.id) === tabIdRaw)
+      ? tabIdRaw
+      : Number(lights[0] && lights[0].id) || 1;
+    // 顶部开关为总开关：与顶栏 AUTO/MAN、DetectionSetting 一致，不随 Tab 跳变
+    const autoOn = !!(ctx.state && ctx.state.lightAuto);
     const selectedColor = String((ctx.state && ctx.state.selectedColor) || "");
     const fromDb = Array.isArray(ctx.state && ctx.state.lightColors) ? ctx.state.lightColors : [];
     const fallbackColors = [
@@ -928,75 +1153,126 @@
         .replace(/&/g, "&amp;")
         .replace(/"/g, "&quot;")
         .replace(/</g, "&lt;");
+    const tabs = lights
+      .map((L) => {
+        const on = Number(L.id) === activeId;
+        return `<button type="button" class="spx-light-tab${on ? " active" : ""}" data-act="light-tab" data-id="${L.id}" role="tab" aria-selected="${on ? "true" : "false"}">${escapeAttr(L.name)}</button>`;
+      })
+      .join("");
+    const panes = lights
+      .map((L) => {
+        const on = Number(L.id) === activeId;
+        const v = Number(L.v) || 0;
+        return `<div class="spx-light-pane" data-light-pane="${L.id}" ${on ? "" : "hidden"}>
+            <span class="spx-k">${zh ? "亮度" : "Lvl"}</span>
+            <input type="range" min="0" max="255" value="${v}" data-act="light-slider" data-id="${L.id}" />
+            <span class="spx-v" data-light-val="${L.id}">${v}</span>
+          </div>`;
+      })
+      .join("");
     return `
-      ${section(zh ? "亮度控制" : "Brightness")}
-      <div class="spx-light-grid">
-        ${lights
-          .map(
-            (L, i) => `
-          <div class="spx-light-card${i === 0 ? " active" : ""}" data-light="${L.id}">
-            <div class="spx-k">${L.name}</div>
-            <input type="range" min="0" max="255" value="${L.v}" data-act="light-slider" data-id="${L.id}" />
-            <div class="spx-v" data-light-val="${L.id}">${L.v}</div>
-          </div>`
-          )
-          .join("")}
-      </div>
-      ${section(zh ? "布色推荐亮度" : "Cloth Color Presets")}
-      <div class="spx-color-grid" data-selected-color="${escapeAttr(selectedColor)}">
-        ${colorPresets
-          .map((C) => {
-            const c = String(C.color || "#888888");
-            const v1 = Number(C.brightness) || 0;
-            const v2 = C.brightnessBottom != null ? Number(C.brightnessBottom) : v1;
-            const sel = selectedColor && c === selectedColor ? " selected" : "";
-            const tip = zh
-              ? `${c} 光源1:${v1} 光源2:${v2}`
-              : `${c} L1:${v1} L2:${v2}`;
-            return `<button type="button" class="spx-swatch${sel}" style="background:${escapeAttr(c)}" data-act="light-preset" data-color="${escapeAttr(c)}" data-v="${v1}" data-v2="${v2}" title="${escapeAttr(tip)}"><span>${v1}</span></button>`;
-          })
-          .join("")}
-      </div>
-      <div class="spx-actions">${ghostBtn(zh ? "应用" : "Apply", 'data-act="light-apply"')}</div>`;
+      <div class="spx-light-compact">
+        <div class="spx-light-auto-row" data-auto="${autoOn ? "1" : "0"}">
+          <span class="spx-light-auto-lab">
+            <span class="spx-light-auto-ico" aria-hidden="true" title="${zh ? (autoOn ? "自动调光" : "手动调光") : autoOn ? "Auto" : "Manual"}"></span>
+            <span>${zh ? "自动调光" : "Auto"}</span>
+          </span>
+          <label class="spx-switch" title="${zh ? (autoOn ? "开" : "关") : autoOn ? "On" : "Off"}">
+            <input type="checkbox" data-act="light-auto" ${autoOn ? "checked" : ""} />
+            <span class="spx-switch-track" aria-hidden="true"><span class="spx-switch-thumb"></span></span>
+          </label>
+        </div>
+        <div class="spx-light-ctrl">
+          <div class="spx-light-tabs" role="tablist" aria-label="${zh ? "光源" : "Lights"}">${tabs}</div>
+          <div class="spx-light-panes">${panes}</div>
+        </div>
+        <div class="spx-light-presets">
+          <div class="spx-light-presets-h">${zh ? "布色推荐" : "Presets"}</div>
+          <div class="spx-color-grid" data-selected-color="${escapeAttr(selectedColor)}">
+            ${colorPresets
+              .map((C) => {
+                const c = String(C.color || "#888888");
+                const v1 = Number(C.brightness) || 0;
+                const v2 = C.brightnessBottom != null ? Number(C.brightnessBottom) : v1;
+                const sel = selectedColor && c === selectedColor ? " selected" : "";
+                const tip = zh
+                  ? `${c} 光源1:${v1} 光源2:${v2}`
+                  : `${c} L1:${v1} L2:${v2}`;
+                return `<button type="button" class="spx-swatch${sel}" style="background:${escapeAttr(c)}" data-act="light-preset" data-color="${escapeAttr(c)}" data-v="${v1}" data-v2="${v2}" title="${escapeAttr(tip)}"><span>${v1}</span></button>`;
+              })
+              .join("")}
+          </div>
+        </div>
+        <div class="spx-actions spx-light-actions">${ghostBtn(zh ? "应用" : "Apply", 'data-act="light-apply"')}</div>
+      </div>`;
   }
 
   function buildAlarm(ctx) {
     const zh = ctx.lang === "zh-CN";
     const list = Array.isArray(ctx.state.alarmList) ? ctx.state.alarmList : [];
-    const typeLabel = (t) => {
-      const s = String(t || "");
-      if (s === "plc_warn") return zh ? "预警" : "Warn";
-      if (s === "label_alarm") return zh ? "贴标" : "Label";
-      if (s === "motor_alarm") return zh ? "电机" : "Motor";
-      if (s === "device_error" || s === "custom_alarm") return zh ? "设备" : "Device";
-      if (s === "plc_alarm" || s === "error") return zh ? "报警" : "Alarm";
-      return s || (zh ? "报警" : "Alarm");
+    const esc = (s) =>
+      String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    const typeClass = (t) => {
+      const s = String(t || "").trim();
+      if (s === "plc_warn" || s === "warning" || s === "warn") return "plc_warn";
+      if (s === "label_alarm") return "label_alarm";
+      if (s === "motor_alarm") return "motor_alarm";
+      if (s === "device_error" || s === "custom_alarm") return s;
+      if (s === "plc_alarm" || s === "error" || s === "alarm") return "plc_alarm";
+      return s || "plc_alarm";
     };
-    let rows;
+    const typeLabel = (t) => {
+      const c = typeClass(t);
+      if (c === "plc_warn") return zh ? "预警" : "Warn";
+      if (c === "label_alarm") return zh ? "贴标" : "Label";
+      if (c === "motor_alarm") return zh ? "电机" : "Motor";
+      if (c === "device_error" || c === "custom_alarm") return zh ? "设备" : "Device";
+      return zh ? "报警" : "Alarm";
+    };
+    const worstLiveClass = () => {
+      if (!list.length) return "ok";
+      const onlyWarn = list.every((a) => typeClass(a && a.type) === "plc_warn");
+      return onlyWarn ? "warn" : "alarm";
+    };
+    let bodyHtml;
     if (list.length) {
-      rows = list.map((a) => [
-        typeLabel(a.type),
-        a.code || a.key || "-",
-        a.msg || a.message || a.title || "-",
-      ]);
+      bodyHtml = list
+        .map((a) => {
+          const cls = typeClass(a.type);
+          const code = esc(a.code || a.key || "-");
+          const msg = esc(a.msg || a.message || a.title || "-");
+          return `<tr class="spx-alarm-row ${cls}"><td><span class="spx-alarm-badge ${cls}">${esc(
+            typeLabel(a.type)
+          )}</span></td><td>${code}</td><td>${msg}</td></tr>`;
+        })
+        .join("");
     } else {
-      rows = [["-", "-", zh ? "当前无报警" : "No alarms"]];
+      bodyHtml = `<tr><td>-</td><td>-</td><td>${zh ? "当前无报警" : "No alarms"}</td></tr>`;
     }
-    const live = list.length
-      ? `<p class="spx-msg">${zh ? "当前" : "Now"}（${list.length}）：${
+    const liveText = list.length
+      ? `${zh ? "当前" : "Now"}（${list.length}）：${esc(
           ctx.state.alarmMsg || list.map((a) => a.msg).filter(Boolean).join(" · ")
-        }</p>`
-      : `<p class="spx-msg">${zh ? "当前无报警" : "No alarms"}</p>`;
+        )}`
+      : zh
+        ? "当前无报警"
+        : "No alarms";
     return `
       ${section(zh ? "报警列表" : "Alarms")}
-      ${live}
+      <p class="spx-msg spx-alarm-live ${worstLiveClass()}">${liveText}</p>
       <table class="spx-table">
         <thead><tr><th>${zh ? "类型" : "Type"}</th><th>${zh ? "代码" : "Code"}</th><th>${zh ? "信息" : "Message"}</th></tr></thead>
-        <tbody>
-          ${rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("")}
-        </tbody>
+        <tbody>${bodyHtml}</tbody>
       </table>
-      <div class="spx-actions">${ghostBtn(zh ? "刷新" : "Refresh", 'data-act="alarm-refresh"')}</div>`;
+      <div class="spx-actions">
+        ${ghostBtn(zh ? "刷新" : "Refresh", 'data-act="alarm-refresh"')}
+        ${ghostBtn(zh ? "复位" : "Reset", 'data-act="alarm-reset" data-cmd="Reset"')}
+        <button type="button" class="ghost-btn danger" data-act="alarm-zero" data-cmd="Zero">${zh ? "回零" : "Zero"}</button>
+      </div>
+      <p class="spx-msg" id="popAlarmMsg"></p>`;
   }
 
   function seriesPoints(history, xKey, yKey) {
@@ -1137,14 +1413,57 @@
     return Number.isFinite(n) ? n : d;
   }
 
+  function normalizeLengthUnit(u) {
+    const x = String(u || "").trim().toLowerCase();
+    return x === "yard" || x === "yd" ? "yd" : "m";
+  }
+  function normalizeWidthUnit(u) {
+    const x = String(u || "").trim().toLowerCase();
+    return x === "inch" || x === "in" ? "in" : "cm";
+  }
+  function normalizeSpeedUnit(u) {
+    const x = String(u || "").trim().toLowerCase();
+    if (x === "m/s" || x === "m/min" || x === "yd/s" || x === "yd/min") return x;
+    return "m/min";
+  }
+  /** 内部恒 m；yd 对齐 V1 ×1.0936 */
+  function lengthFromMeters(m, unit) {
+    return normalizeLengthUnit(unit) === "yd" ? m * 1.0936 : m;
+  }
+  /** 内部恒 cm；in 对齐 V1 ×0.3937 */
+  function widthFromCm(cm, unit) {
+    return normalizeWidthUnit(unit) === "in" ? cm * 0.3937 : cm;
+  }
+  /** 内部恒 m/min */
+  function speedFromMetersPerMin(mpm, unit) {
+    const u = normalizeSpeedUnit(unit);
+    if (u === "m/s") return mpm / 60;
+    if (u === "yd/s") return mpm / 60 / 0.9144;
+    if (u === "yd/min") return mpm / 0.9144;
+    return mpm;
+  }
+
   /** 与 preview/spacex-main.html state 字段对齐（兼容 embed/API 别名） */
   function metricState(s) {
     s = s || {};
+    const lengthUnit = normalizeLengthUnit(s.lengthUnit);
+    const widthUnit = normalizeWidthUnit(s.widthUnit);
+    const speedUnit = normalizeSpeedUnit(s.speedUnit);
+    const lengthM = num(s.lengthM, 0);
+    const targetM = num(s.targetM != null ? s.targetM : s.targetLengthM, 0);
+    const widthCm = num(s.widthCm, 0);
+    const speed = num(s.speed, 0);
     return {
-      lengthM: num(s.lengthM, 0),
-      targetM: num(s.targetM != null ? s.targetM : s.targetLengthM, 0),
-      widthCm: num(s.widthCm, 0),
-      speed: num(s.speed, 0),
+      lengthUnit,
+      widthUnit,
+      speedUnit,
+      lengthM: lengthFromMeters(lengthM, lengthUnit),
+      lengthMeters: lengthM,
+      targetM: lengthFromMeters(targetM, lengthUnit),
+      widthCm: widthFromCm(widthCm, widthUnit),
+      widthCmRaw: widthCm,
+      speed: speedFromMetersPerMin(speed, speedUnit),
+      speedMPerMin: speed,
       colorDiff: num(s.colorDiff, 0),
       tension: num(s.tension, 0),
       unwind: num(s.unwind != null ? s.unwind : s.unwindPercent, 0),
@@ -1152,6 +1471,7 @@
       gpu: num(s.gpu != null ? s.gpu : s.gpuPercent, 0),
       cpuTemp: num(s.cpuTemp != null ? s.cpuTemp : s.cpuTempC, -1),
       gpuTemp: num(s.gpuTemp != null ? s.gpuTemp : s.gpuTempC, -1),
+      weightKg: num(s.weightKg, 0),
     };
   }
 
@@ -1200,17 +1520,21 @@
       return buildPerfHourCharts(ctx, kind);
     }
 
+    const lenU = s.lengthUnit || "m";
+    const widU = s.widthUnit || "cm";
+    const spdU = s.speedUnit || "m/min";
     const specs = {
       length: {
         xKey: "t",
         yKey: "lengthM",
         digits: 1,
-        unit: "m",
-        current: `${s.lengthM.toFixed(1)} / ${s.targetM.toFixed(1)} m`,
+        unit: lenU,
+        convertY: (v) => lengthFromMeters(v, lenU),
+        current: `${s.lengthM.toFixed(1)} / ${s.targetM.toFixed(1)} ${lenU}`,
         currentLabel: zh ? "当前码长" : "Current",
         title: zh ? "时间 — 码长 序列" : "Time — Length",
         xLabel: zh ? "时间(s)" : "Time(s)",
-        yLabel: zh ? "码长(m)" : "Length(m)",
+        yLabel: zh ? `码长(${lenU})` : `Length(${lenU})`,
         fmtX: null,
         fmtY: (v) => v.toFixed(1),
       },
@@ -1218,12 +1542,14 @@
         xKey: "lengthM",
         yKey: "widthCm",
         digits: 1,
-        unit: "cm",
-        current: `${s.widthCm.toFixed(1)} cm`,
+        unit: widU,
+        convertX: (v) => lengthFromMeters(v, lenU),
+        convertY: (v) => widthFromCm(v, widU),
+        current: `${s.widthCm.toFixed(1)} ${widU}`,
         currentLabel: zh ? "当前幅宽" : "Current",
         title: zh ? "码长 — 幅宽 序列" : "Length — Width",
-        xLabel: zh ? "码长(m)" : "Length(m)",
-        yLabel: zh ? "幅宽(cm)" : "Width(cm)",
+        xLabel: zh ? `码长(${lenU})` : `Length(${lenU})`,
+        yLabel: zh ? `幅宽(${widU})` : `Width(${widU})`,
         fmtX: (v) => v.toFixed(1),
         fmtY: (v) => v.toFixed(1),
       },
@@ -1231,12 +1557,14 @@
         xKey: "lengthM",
         yKey: "speed",
         digits: 1,
-        unit: "m/min",
-        current: `${s.speed.toFixed(1)} m/min`,
+        unit: spdU,
+        convertX: (v) => lengthFromMeters(v, lenU),
+        convertY: (v) => speedFromMetersPerMin(v, spdU),
+        current: `${s.speed.toFixed(1)} ${spdU}`,
         currentLabel: zh ? "当前速度" : "Current",
         title: zh ? "码长 — 速度 序列" : "Length — Speed",
-        xLabel: zh ? "码长(m)" : "Length(m)",
-        yLabel: zh ? "速度(m/min)" : "Speed(m/min)",
+        xLabel: zh ? `码长(${lenU})` : `Length(${lenU})`,
+        yLabel: zh ? `速度(${spdU})` : `Speed(${spdU})`,
         fmtX: (v) => v.toFixed(1),
         fmtY: (v) => v.toFixed(1),
       },
@@ -1245,10 +1573,11 @@
         yKey: "colorDiff",
         digits: 2,
         unit: "",
+        convertX: (v) => lengthFromMeters(v, lenU),
         current: s.colorDiff.toFixed(2),
         currentLabel: zh ? "当前色差" : "Current ΔE",
         title: zh ? "码长 — 色差 序列" : "Length — ΔE",
-        xLabel: zh ? "码长(m)" : "Length(m)",
+        xLabel: zh ? `码长(${lenU})` : `Length(${lenU})`,
         yLabel: "ΔE",
         fmtX: (v) => v.toFixed(1),
         fmtY: (v) => v.toFixed(2),
@@ -1258,10 +1587,11 @@
         yKey: "tension",
         digits: 1,
         unit: "",
+        convertX: (v) => lengthFromMeters(v, lenU),
         current: s.tension.toFixed(1),
         currentLabel: zh ? "当前张力" : "Current",
         title: zh ? "码长 — 张力 序列" : "Length — Tension",
-        xLabel: zh ? "码长(m)" : "Length(m)",
+        xLabel: zh ? `码长(${lenU})` : `Length(${lenU})`,
         yLabel: zh ? "张力" : "Tension",
         fmtX: (v) => v.toFixed(1),
         fmtY: (v) => v.toFixed(1),
@@ -1271,10 +1601,11 @@
         yKey: "weightKg",
         digits: 1,
         unit: "kg",
+        convertX: (v) => lengthFromMeters(v, lenU),
         current: `${Number(s.weightKg || 0).toFixed(1)} kg`,
         currentLabel: zh ? "当前重量" : "Current",
         title: zh ? "码长 — 重量 序列" : "Length — Weight",
-        xLabel: zh ? "码长(m)" : "Length(m)",
+        xLabel: zh ? `码长(${lenU})` : `Length(${lenU})`,
         yLabel: zh ? "重量(kg)" : "Weight(kg)",
         fmtX: (v) => v.toFixed(1),
         fmtY: (v) => v.toFixed(1),
@@ -1291,7 +1622,13 @@
       return `${section(titleOf(kind, ctx.lang))}${rows.map(([k, v]) => kv(k, v)).join("")}`;
     }
 
-    const pts = seriesPoints(hist, spec.xKey, spec.yKey);
+    let pts = seriesPoints(hist, spec.xKey, spec.yKey);
+    if (spec.convertX || spec.convertY) {
+      pts = pts.map((p) => ({
+        x: spec.convertX ? spec.convertX(p.x) : p.x,
+        y: spec.convertY ? spec.convertY(p.y) : p.y,
+      }));
+    }
     const stats = seriesStats(pts, spec.digits);
     let fmtX = spec.fmtX;
     if (kind === "length") {
@@ -1318,6 +1655,7 @@
   function buildWeight(ctx) {
     const zh = ctx.lang === "zh-CN";
     const s = ctx.state;
+    const lenU = normalizeLengthUnit(s && s.lengthUnit);
     const gross = Number.isFinite(s.weightGrossKg) ? s.weightGrossKg : s.weightKg;
     const net = Number.isFinite(s.weightNetKg) ? s.weightNetKg : s.weightKg;
     const rolls = Array.isArray(s.recentWeights) ? s.recentWeights : [];
@@ -1352,7 +1690,7 @@
                     <td>${r.roll || "-"}</td>
                     <td>${Number(r.gross).toFixed(1)}</td>
                     <td>${Number(r.net).toFixed(1)}</td>
-                    <td>${Number(r.lengthM).toFixed(1)} m</td>
+                    <td>${lengthFromMeters(Number(r.lengthM), lenU).toFixed(1)} ${lenU}</td>
                   </tr>`
                 : `<tr><td>${i + 1}</td><td colspan="4" style="color:rgba(201,208,220,0.35)">—</td></tr>`
             )
@@ -1467,15 +1805,35 @@
     return `<input id="${id}"${keyAttr} type="text" value="${settingAttr(item.value)}" />`;
   }
 
+  function groupSettingSections(group, zh) {
+    const secs = [];
+    const seen = {};
+    (group.items || []).forEach((it) => {
+      const name = zh ? it.sectionZh || "" : it.sectionEn || "";
+      if (!name || seen[name]) return;
+      seen[name] = 1;
+      secs.push(name);
+    });
+    return secs;
+  }
+
+  function settingsSecId(groupId, index) {
+    return `setsec_${groupId}_${index}`;
+  }
+
   function buildSettingsPane(group, zh, active) {
     let lastSec = "";
+    let secIndex = -1;
     const rows = (group.items || [])
       .map((it) => {
         const secName = zh ? it.sectionZh || "" : it.sectionEn || "";
-        const head =
-          secName && secName !== lastSec
-            ? ((lastSec = secName), `<div class="spx-settings-sec">${secName}</div>`)
-            : "";
+        let head = "";
+        if (secName && secName !== lastSec) {
+          lastSec = secName;
+          secIndex += 1;
+          const sid = settingsSecId(group.id, secIndex);
+          head = `<div class="spx-settings-sec" id="${sid}" data-sec-id="${sid}">${settingAttr(secName)}</div>`;
+        }
         const label = zh ? it.labelZh : it.labelEn;
         const keyHtml =
           it.key && !String(it.key).startsWith("__")
@@ -1522,6 +1880,7 @@
     const isAdmin = !!(ctx && ctx.about && ctx.about.isAdmin);
     const catalog = settingsGroups(ctx);
     const prefer = ctx.settingsTabId || "";
+    const preferSec = ctx.settingsSecId || "";
     const activeId =
       prefer && catalog.some((g) => g.id === prefer)
         ? prefer
@@ -1529,12 +1888,24 @@
           ? catalog[0].id
           : "";
     const tabs = catalog
-      .map(
-        (g) =>
-          `<button type="button" class="${g.id === activeId ? "active" : ""}" data-act="settings-tab" data-tab="${g.id}">${
-            zh ? g.titleZh : g.titleEn
-          }</button>`
-      )
+      .map((g) => {
+        const active = g.id === activeId;
+        // 子分类默认折叠；仅在恢复到具体分区时展开
+        const expanded = !!(preferSec && String(preferSec).indexOf(`setsec_${g.id}_`) === 0);
+        const title = zh ? g.titleZh : g.titleEn;
+        const secs = groupSettingSections(g, zh);
+        const subs = secs
+          .map((name, i) => {
+            const sid = settingsSecId(g.id, i);
+            const on = expanded && preferSec === sid;
+            return `<button type="button" class="spx-settings-sub${on ? " active" : ""}" data-act="settings-tab" data-tab="${g.id}" data-sec="${sid}">${settingAttr(name)}</button>`;
+          })
+          .join("");
+        return `<div class="spx-settings-nav-group${expanded ? " is-open" : ""}" data-nav-group="${g.id}">
+          <button type="button" class="spx-settings-nav-main${active ? " active" : ""}" data-act="settings-tab" data-tab="${g.id}">${settingAttr(title)}</button>
+          <div class="spx-settings-nav-subs">${subs}</div>
+        </div>`;
+      })
       .join("");
     const panes = catalog.map((g) => buildSettingsPane(g, zh, g.id === activeId)).join("");
     let hint = ctx.settingsLoaded
@@ -1552,7 +1923,7 @@
     return `
       <div class="spx-settings ${isAdmin ? "is-admin" : "is-operator"}">
         <aside class="spx-tabs" id="popSettingsTabs">${tabs}</aside>
-        <div class="spx-tab-body">
+        <div class="spx-tab-body" id="popSettingsBody">
           <p class="spx-msg" id="popSettingsMsg">${hint}</p>
           ${panes}
           <div class="spx-actions">${ghostBtn(zh ? "保存" : "Save", 'data-act="settings-save"')}</div>
@@ -1632,6 +2003,12 @@
 
   function buildFourPoints(ctx) {
     const zh = ctx.lang === "zh-CN";
+    const escFp = (s) =>
+      String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     const fp = ctx.fourPoints || {
       total: 0,
       per100Sq: 0,
@@ -1642,53 +2019,94 @@
       isNg: false,
     };
     const c = fp.counts || {};
-    const result = fp.isNg ? "NG" : "OK";
-    const resultCls = fp.isNg ? "bad" : "ok";
+    const isNg = !!(fp.isNg || fp.ng);
+    const result = fp.result || (isNg ? "NG" : "OK");
+    const resultCls = isNg ? "bad" : "ok";
+    const per100Label = fp.useYard
+      ? (zh ? "百码" : "/100yd")
+      : (zh ? "百米" : "/100m");
+    const per100SqLabel = fp.useYard
+      ? (zh ? "百平方码" : "/100yd²")
+      : (zh ? "百平米" : "/100m²");
+    const meterUnit = fp.useYard ? (zh ? "码" : "yd") : (zh ? "米" : "m");
+    const fpStat = (key, k, v) =>
+      `<div class="spx-fp-stat" data-fp-stat="${key}"><span class="spx-fp-stat-k">${k}</span><span class="spx-fp-stat-v" data-fp-val="${key}">${v}</span></div>`;
+    const meterBlock =
+      fp.meterIndex || fp.meterPoints || fp.meterGrade || fp.meterListText
+        ? `<div class="spx-fp-meter" data-fp-meter="1">
+             <div class="spx-fp-meter-head">${zh ? "当前米/码段" : "Current Segment"}</div>
+             <div class="spx-fp-stats spx-fp-stats-meter">
+               ${fpStat("meterIndex", zh ? "段号" : "Seg", `${fp.meterIndex || "-"} ${meterUnit}`)}
+               ${fpStat("meterPoints", zh ? "本段扣分" : "Seg pts", String(fp.meterPoints || 0))}
+               ${fpStat("meterGrade", zh ? "本段等级" : "Grade", fp.meterGrade || "-")}
+             </div>
+             ${
+               fp.meterListText
+                 ? `<pre class="spx-fp-meter-list" data-fp-val="meterList">${escFp(String(fp.meterListText))}</pre>`
+                 : ""
+             }
+           </div>`
+        : "";
+    const rows = Array.isArray(fp.rows) ? fp.rows : [];
+    const gradeRow = (name, count, mul) =>
+      `<div class="spx-fp-grade" data-fp-grade="${name}">
+         <span class="spx-fp-grade-name">${name}</span>
+         <span class="spx-fp-grade-count" data-fp-val="grade${name}">${count || 0}</span>
+         <span class="spx-fp-grade-mul">×${mul}</span>
+       </div>`;
     return `
-      <div class="spx-fp-panel">
-        <div class="spx-fp-summary">
-          <div class="spx-fp-result ${resultCls}">${result}</div>
-          <div class="spx-fp-kpis">
-            ${kv(zh ? "总扣分" : "Total", String(fp.total))}
-            ${kv(zh ? "百平方码扣分" : "/100 yd²", Number(fp.per100Sq).toFixed(2))}
-            ${kv(zh ? "百码扣分" : "/100 yd", Number(fp.per100).toFixed(2))}
-            ${kv(zh ? "合格线" : "Threshold", String(fp.threshold))}
+      <div class="spx-fp-panel" data-fp-panel="1">
+        <div class="spx-fp-head">
+          <div class="spx-fp-result ${resultCls}" data-fp-val="result">${result}</div>
+          <div class="spx-fp-stats">
+            ${fpStat("total", zh ? "总扣分" : "Total", String(fp.total != null ? fp.total : 0))}
+            ${fpStat("per100Sq", per100SqLabel, Number(fp.per100Sq || 0).toFixed(2))}
+            ${fpStat("per100", per100Label, Number(fp.per100 || 0).toFixed(2))}
+            ${fpStat("threshold", zh ? "合格线" : "Limit", String(fp.threshold != null ? fp.threshold : 0))}
           </div>
         </div>
-        ${section(zh ? "I–IV 级别数量" : "Grade Counts I–IV")}
         <div class="spx-fp-grades">
-          <div class="spx-fp-grade"><span class="spx-k">I</span><span class="spx-v">${c.I || 0}</span><span class="spx-k">×1</span></div>
-          <div class="spx-fp-grade"><span class="spx-k">II</span><span class="spx-v">${c.II || 0}</span><span class="spx-k">×2</span></div>
-          <div class="spx-fp-grade"><span class="spx-k">III</span><span class="spx-v">${c.III || 0}</span><span class="spx-k">×3</span></div>
-          <div class="spx-fp-grade"><span class="spx-k">IV</span><span class="spx-v">${c.IV || 0}</span><span class="spx-k">×4</span></div>
+          ${gradeRow("I", c.I, 4)}
+          ${gradeRow("II", c.II, 3)}
+          ${gradeRow("III", c.III, 2)}
+          ${gradeRow("IV", c.IV, 1)}
         </div>
-        ${section(zh ? "扣分详情" : "Deduction Detail")}
-        <div class="spx-defect-scroll">
-          <table class="spx-table spx-fp-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>${zh ? "疵点" : "Defect"}</th>
-                <th>${zh ? "级别" : "Grade"}</th>
-                <th>${zh ? "扣分" : "Pts"}</th>
-                <th>Y (m)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(fp.rows || [])
-                .map(
-                  (r) => `<tr>
-                  <td class="mono">${r.id}</td>
-                  <td>${r.title}</td>
-                  <td>${r.grade}</td>
-                  <td class="spx-v">${r.points}</td>
-                  <td class="mono">${Number(r.y).toFixed(1)}</td>
-                </tr>`
-                )
-                .join("") ||
-                `<tr><td colspan="5" class="spx-msg">${zh ? "暂无疵点" : "No defects"}</td></tr>`}
-            </tbody>
-          </table>
+        ${meterBlock}
+        <div class="spx-fp-detail">
+          <div class="spx-fp-detail-h">
+            <span>${zh ? "扣分详情" : "Deductions"}</span>
+            <span class="spx-fp-detail-n" data-fp-val="rowCount">${rows.length}</span>
+          </div>
+          <div class="spx-defect-scroll spx-fp-scroll" data-fp-scroll="1">
+            <table class="spx-table spx-fp-table">
+              <thead>
+                <tr>
+                  <th class="col-idx">#</th>
+                  <th class="col-name">${zh ? "疵点" : "Defect"}</th>
+                  <th class="col-grade">${zh ? "级别" : "Gr"}</th>
+                  <th class="col-pts">${zh ? "扣分" : "Pts"}</th>
+                  <th class="col-y">Y</th>
+                </tr>
+              </thead>
+              <tbody data-fp-rows="1">
+                ${
+                  rows.length
+                    ? rows
+                        .map(
+                          (r) => `<tr>
+                    <td class="col-idx mono">${r.id}</td>
+                    <td class="col-name">${escFp(r.title || "")}</td>
+                    <td class="col-grade">${escFp(String(r.grade || ""))}</td>
+                    <td class="col-pts spx-v">${r.points}</td>
+                    <td class="col-y mono">${Number(r.y).toFixed(1)}</td>
+                  </tr>`
+                        )
+                        .join("")
+                    : `<tr><td colspan="5" class="spx-msg">${zh ? "暂无疵点" : "No defects"}</td></tr>`
+                }
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>`;
   }
@@ -1998,10 +2416,35 @@
     return Math.max(5, Math.min(30, Math.floor(avail / rowH)));
   }
 
+  function recordsPanelFrameUrl(rec, panel, lang) {
+    const api = global.SpxApi;
+    if (panel === "dyeing") {
+      const raw = (rec && rec.dyeingUrl) || "http://localhost:1234/views/bfslotreport";
+      if (api && typeof api.resolveRecordsPanelUrl === "function") {
+        return api.resolveRecordsPanelUrl(raw, "/views/bfslotreport", lang, "embedded=1&theme=spx");
+      }
+      return String(raw);
+    }
+    if (panel === "runstat") {
+      const raw = (rec && rec.runStatUrl) || "http://localhost:1234/views/bfsrunstat";
+      if (api && typeof api.resolveRecordsPanelUrl === "function") {
+        return api.resolveRecordsPanelUrl(raw, "/views/bfsrunstat", lang, "theme=spx");
+      }
+      return String(raw);
+    }
+    return "";
+  }
+
   /** DetectionRecords.cpp — 筛选栏 + 库配置列 + 底部分页；设置按钮配置列选择/顺序 */
   function buildRecords(ctx) {
     const zh = ctx.lang === "zh-CN";
     const rec = (ctx.state && ctx.state.recordsUi) || {};
+    const enableDyeing = rec.enableDyeing !== false && rec.enableDyeing !== 0 && rec.enableDyeing !== "0";
+    const enableRunStat = rec.enableRunStat !== false && rec.enableRunStat !== 0 && rec.enableRunStat !== "0";
+    let panel = String(rec.panel || "sheets");
+    if (panel === "dyeing" && !enableDyeing) panel = "sheets";
+    if (panel === "runstat" && !enableRunStat) panel = "sheets";
+    const showPanelTabs = enableDyeing || enableRunStat;
     const filter = rec.filter != null ? Number(rec.filter) : 0; // 0全部 1已检 2未检
     const queryType = rec.queryType != null ? Number(rec.queryType) : 0;
     const queryValue = rec.queryValue != null ? String(rec.queryValue) : "";
@@ -2116,52 +2559,87 @@
       `<tr><td colspan="${displayCols.length}" class="spx-muted">${zh ? "无匹配记录" : "No matching records"}</td></tr>`;
 
     const minWidth = Math.max(720, 88 + 96 + 140 + 72 + Math.max(0, displayCols.length - 4) * 96);
+    const dyeingSrc = enableDyeing ? recordsPanelFrameUrl(rec, "dyeing", ctx.lang) : "";
+    const runStatSrc = enableRunStat ? recordsPanelFrameUrl(rec, "runstat", ctx.lang) : "";
+    const panelTab = (id, label) =>
+      `<button type="button" class="ghost-btn compact ${panel === id ? "active" : ""}" data-act="rec-panel" data-panel="${id}">${label}</button>`;
+
+    const panelTabsHtml = showPanelTabs
+      ? `<div class="spx-records-panel-tabs" id="popRecPanelTabs">
+            ${panelTab("sheets", zh ? "检验记录" : "Records")}
+            ${enableDyeing ? panelTab("dyeing", zh ? "缸报告" : "Dyeing") : ""}
+            ${enableRunStat ? panelTab("runstat", zh ? "运行统计" : "Run Stat") : ""}
+          </div>`
+      : "";
+
+    const sheetsPane = `
+        <div class="spx-records-sheet-pane" data-rec-pane="sheets" ${panel === "sheets" ? "" : "hidden"}>
+          <div class="spx-records-toolbar">
+            <div class="spx-records-tabs">
+              ${tab(0, zh ? "全部检验单" : "All")}
+              ${tab(1, zh ? "已检验" : "Finished")}
+              ${tab(2, zh ? "未检验" : "Unfinished")}
+              <button type="button" class="ghost-btn compact" data-act="rec-export">${zh ? "导出数据" : "Export"}</button>
+              <button type="button" class="ghost-btn compact" data-act="rec-total-len">${zh ? "检验长度" : "Length"} ${totalLen.toFixed(0)} m</button>
+              <button type="button" class="ghost-btn compact${settingsOpen ? " active" : ""}" data-act="rec-settings" title="${zh ? "列设置" : "Columns"}">${zh ? "设置" : "Settings"}</button>
+            </div>
+            <div class="spx-records-query">
+              <select id="popRecQueryType" class="spx-records-filter" aria-label="${zh ? "过滤项目" : "Filter"}">${queryOpts}</select>
+              <input id="popRecQueryValue" type="text" value="${queryValue}" placeholder="${zh ? "查询内容" : "Query"}" data-osk="1" ${showValue ? "" : "hidden"} />
+              <input id="popRecDate" type="date" value="${rec.queryDate || ""}" ${showDate ? "" : "hidden"} />
+              <input id="popRecDate2" type="date" value="${rec.queryDate2 || ""}" ${showDate2 ? "" : "hidden"} />
+              <button type="button" class="ghost-btn compact" data-act="rec-search" title="${zh ? "搜索" : "Search"}">⌕</button>
+            </div>
+          </div>
+          <div class="spx-records-table-wrap">
+            <table class="spx-table spx-records-table" style="min-width:${minWidth}px">
+              <thead>
+                <tr>${headCells}</tr>
+              </thead>
+              <tbody>${bodyRows}</tbody>
+            </table>
+          </div>
+          <div class="spx-records-pager">
+            <div class="spx-records-pager-ctrl">
+              <button type="button" class="ghost-btn compact" data-act="rec-page" data-page="1" ${cur <= 1 ? "disabled" : ""}>${zh ? "首页" : "First"}</button>
+              <button type="button" class="ghost-btn compact" data-act="rec-page" data-page="${cur - 1}" ${cur <= 1 ? "disabled" : ""}>${zh ? "上页" : "Prev"}</button>
+              <button type="button" class="ghost-btn compact" data-act="rec-page" data-page="${cur + 1}" ${cur >= pages ? "disabled" : ""}>${zh ? "下页" : "Next"}</button>
+              <button type="button" class="ghost-btn compact" data-act="rec-page" data-page="${pages}" ${cur >= pages ? "disabled" : ""}>${zh ? "末页" : "Last"}</button>
+              <span class="spx-records-sep"></span>
+              <span class="mono">${zh ? "第" : "P"}</span>
+              <input id="popRecJump" type="number" min="1" max="${pages}" value="${cur}" data-osk="1" />
+              <span class="mono">${zh ? "页" : ""}</span>
+              <button type="button" class="ghost-btn compact" data-act="rec-jump">${zh ? "跳转" : "Go"}</button>
+            </div>
+            <div class="spx-records-pager-meta mono">
+              <span>${zh ? "共" : ""} <b id="popRecPages">${pages}</b> ${zh ? "页" : "pages"}</span>
+              <span class="spx-records-sep"></span>
+              <span>${zh ? "共" : ""} <b id="popRecTotal">${total}</b> ${zh ? "记录" : "records"}</span>
+            </div>
+          </div>
+        </div>`;
+
+    const dyeingPane = enableDyeing
+      ? `<div class="spx-records-frame-pane" data-rec-pane="dyeing" ${panel === "dyeing" ? "" : "hidden"}>
+            <iframe class="spx-records-frame" title="${zh ? "缸报告" : "Dyeing report"}"
+              ${panel === "dyeing" ? `src="${escapeAttr(dyeingSrc)}"` : `data-src="${escapeAttr(dyeingSrc)}"`}
+              referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>`
+      : "";
+    const runStatPane = enableRunStat
+      ? `<div class="spx-records-frame-pane" data-rec-pane="runstat" ${panel === "runstat" ? "" : "hidden"}>
+            <iframe class="spx-records-frame" title="${zh ? "运行统计" : "Run statistics"}"
+              ${panel === "runstat" ? `src="${escapeAttr(runStatSrc)}"` : `data-src="${escapeAttr(runStatSrc)}"`}
+              referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>`
+      : "";
 
     return `
-      <div class="spx-records${settingsOpen ? " is-settings" : ""}">
-        <div class="spx-records-toolbar">
-          <div class="spx-records-tabs">
-            ${tab(0, zh ? "全部检验单" : "All")}
-            ${tab(1, zh ? "已检验" : "Finished")}
-            ${tab(2, zh ? "未检验" : "Unfinished")}
-            <button type="button" class="ghost-btn compact" data-act="rec-export">${zh ? "导出数据" : "Export"}</button>
-            <button type="button" class="ghost-btn compact" data-act="rec-total-len">${zh ? "检验长度" : "Length"} ${totalLen.toFixed(0)} m</button>
-            <button type="button" class="ghost-btn compact${settingsOpen ? " active" : ""}" data-act="rec-settings" title="${zh ? "列设置" : "Columns"}">${zh ? "设置" : "Settings"}</button>
-          </div>
-          <div class="spx-records-query">
-            <select id="popRecQueryType" class="spx-records-filter" aria-label="${zh ? "过滤项目" : "Filter"}">${queryOpts}</select>
-            <input id="popRecQueryValue" type="text" value="${queryValue}" placeholder="${zh ? "查询内容" : "Query"}" data-osk="1" ${showValue ? "" : "hidden"} />
-            <input id="popRecDate" type="date" value="${rec.queryDate || ""}" ${showDate ? "" : "hidden"} />
-            <input id="popRecDate2" type="date" value="${rec.queryDate2 || ""}" ${showDate2 ? "" : "hidden"} />
-            <button type="button" class="ghost-btn compact" data-act="rec-search" title="${zh ? "搜索" : "Search"}">⌕</button>
-          </div>
-        </div>
-        <div class="spx-records-table-wrap">
-          <table class="spx-table spx-records-table" style="min-width:${minWidth}px">
-            <thead>
-              <tr>${headCells}</tr>
-            </thead>
-            <tbody>${bodyRows}</tbody>
-          </table>
-        </div>
-        <div class="spx-records-pager">
-          <div class="spx-records-pager-meta mono">
-            <span>${zh ? "共" : ""} <b id="popRecPages">${pages}</b> ${zh ? "页" : "pages"}</span>
-            <span class="spx-records-sep"></span>
-            <span>${zh ? "共" : ""} <b id="popRecTotal">${total}</b> ${zh ? "记录" : "records"}</span>
-          </div>
-          <div class="spx-records-pager-ctrl">
-            <button type="button" class="ghost-btn compact" data-act="rec-page" data-page="1" ${cur <= 1 ? "disabled" : ""}>${zh ? "首页" : "First"}</button>
-            <button type="button" class="ghost-btn compact" data-act="rec-page" data-page="${cur - 1}" ${cur <= 1 ? "disabled" : ""}>${zh ? "上页" : "Prev"}</button>
-            <button type="button" class="ghost-btn compact" data-act="rec-page" data-page="${cur + 1}" ${cur >= pages ? "disabled" : ""}>${zh ? "下页" : "Next"}</button>
-            <button type="button" class="ghost-btn compact" data-act="rec-page" data-page="${pages}" ${cur >= pages ? "disabled" : ""}>${zh ? "末页" : "Last"}</button>
-            <span class="spx-records-sep"></span>
-            <span class="mono">${zh ? "第" : "P"}</span>
-            <input id="popRecJump" type="number" min="1" max="${pages}" value="${cur}" data-osk="1" />
-            <span class="mono">${zh ? "页" : ""}</span>
-            <button type="button" class="ghost-btn compact" data-act="rec-jump">${zh ? "跳转" : "Go"}</button>
-          </div>
-        </div>
+      <div class="spx-records${settingsOpen ? " is-settings" : ""}${showPanelTabs ? " has-panel-tabs" : ""}" data-panel="${panel}">
+        ${panelTabsHtml}
+        ${sheetsPane}
+        ${dyeingPane}
+        ${runStatPane}
         ${settingsOpen ? buildRecordsColumnSettings(ctx, zh, rec) : ""}
       </div>`;
   }
@@ -2269,15 +2747,27 @@
       { id: 4, name: "Slub", on: false, auto: false, prec: 50, minX: 2, maxX: 60, minY: 2, maxY: 60 },
       { id: 5, name: "Broken", on: true, auto: true, prec: 58, minX: 5, maxX: 150, minY: 5, maxY: 150 },
     ];
-    const defs = Array.isArray(ui.defects) && ui.defects.length ? ui.defects : demoDefs;
+    // 已从后台加载过则不要回落 demo（否则切布种失败/空数据时看起来像“没刷新”）
+    const hasLoaded = ui.loaded === true || (Array.isArray(ui.defects) && ui.defects.length > 0);
+    const defs = Array.isArray(ui.defects) && ui.defects.length
+      ? ui.defects
+      : hasLoaded
+        ? []
+        : demoDefs;
     const cloths = Array.isArray(ui.cloths) && ui.cloths.length
       ? ui.cloths
-      : [
-          { id: "demo1", name: "Twill 280GSM" },
-          { id: "demo2", name: "Plain 200GSM" },
-          { id: "demo3", name: "Denim 12oz" },
-        ];
-    const clothId = ui.clothId != null ? String(ui.clothId) : String(cloths[0].id);
+      : hasLoaded
+        ? []
+        : [
+            { id: "demo1", name: "Twill 280GSM" },
+            { id: "demo2", name: "Plain 200GSM" },
+            { id: "demo3", name: "Denim 12oz" },
+          ];
+    const clothId = ui.clothId != null && ui.clothId !== ""
+      ? String(ui.clothId)
+      : cloths.length
+        ? String(cloths[0].id)
+        : "";
     const clothTabs = cloths
       .map((c) => {
         const id = String(c.id);
@@ -2292,19 +2782,36 @@
     const loadingHint = ui.loaded === false
       ? `<div class="spx-muted" style="padding:8px 4px;">${zh ? "正在加载后台参数…" : "Loading…"}</div>`
       : "";
+    const isAdmin = !!(ctx.about && ctx.about.isAdmin);
+    const ico = (paths) =>
+      `<svg class="spx-defect-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+    const defectIcoBtn = (label, act, paths, extraClass) =>
+      `<button type="button" class="ghost-btn compact spx-defect-ico-btn${extraClass ? " " + extraClass : ""}" data-act="${act}" title="${escapeAttr(label)}" aria-label="${escapeAttr(label)}"><span class="spx-defect-ico-wrap">${ico(paths)}</span><span class="spx-defect-ico-lab">${escapeAttr(label)}</span></button>`;
+    const customBtn = isAdmin
+      ? defectIcoBtn(
+          zh ? "自定义" : "Custom",
+          "defect-settings-custom",
+          '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/><path d="M17.5 16.5l2 2M19 14.2a1.8 1.8 0 1 0 0 3.6"/>'
+        )
+      : "";
     return `
       <div class="spx-defect-panel">
         <div class="spx-toolbar spx-defect-toolbar">
           <div class="spx-defect-cloth-bar">
+            <button type="button" class="ghost-btn compact spx-defect-cloth-nav" data-act="defect-settings-cloth-prev" title="${zh ? "上一组布料" : "Prev cloths"}" aria-label="${zh ? "上一组布料" : "Prev cloths"}">‹</button>
             <div class="spx-defect-cloth-tabs" id="popDefectClothTabs" role="tablist" aria-label="${zh ? "布种" : "Cloth"}">
               ${clothTabs || `<span class="spx-muted">${zh ? "暂无布种" : "No cloth"}</span>`}
             </div>
+            <button type="button" class="ghost-btn compact spx-defect-cloth-nav" data-act="defect-settings-cloth-next" title="${zh ? "下一组布料" : "Next cloths"}" aria-label="${zh ? "下一组布料" : "Next cloths"}">›</button>
             <button type="button" class="ghost-btn compact spx-defect-cloth-add-btn" data-act="defect-settings-cloth-add" title="${zh ? "新增布料" : "Add cloth"}">+</button>
             <input type="hidden" id="popDefectCloth" value="${escapeAttr(clothId)}" />
           </div>
           <div class="spx-toolbar-actions">
-            ${ghostBtn(zh ? "保存" : "Save", 'data-act="defect-settings-save"')}
-            ${ghostBtn(zh ? "刷新" : "Refresh", 'data-act="defect-settings-refresh"')}
+            ${defectIcoBtn(zh ? "全开" : "All On", "defect-settings-all-on", '<rect x="3" y="5" width="18" height="10" rx="5" fill="currentColor" stroke="none"/><circle cx="16" cy="10" r="3.2" fill="#12161e" stroke="none"/><path d="M7.2 10.1l1.5 1.5 2.8-3.2" stroke="#12161e" stroke-width="2"/>', "is-on")}
+            ${defectIcoBtn(zh ? "全关" : "All Off", "defect-settings-all-off", '<rect x="3" y="5" width="18" height="10" rx="5"/><circle cx="8" cy="10" r="3.2"/><path d="M14.2 8.2l3.6 3.6M17.8 8.2l-3.6 3.6"/>', "is-off")}
+            ${customBtn}
+            ${defectIcoBtn(zh ? "保存" : "Save", "defect-settings-save", '<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h8V4M8 20v-7h8v7"/>')}
+            ${defectIcoBtn(zh ? "刷新" : "Refresh", "defect-settings-refresh", '<path d="M19 8.2A7.2 7.2 0 1 0 19.4 14"/><path d="M16.8 4.2l2.8 3.6-4 .2"/>')}
           </div>
         </div>
         <div class="spx-defect-cloth-add" id="popDefectClothAdd" hidden>
@@ -2355,18 +2862,60 @@
           <input id="popDefStepEditorVal" class="spx-def-val" type="number" min="0" max="9999" step="1" inputmode="numeric" data-osk="1" />
           <button type="button" class="mini-btn" data-act="def-step-editor-delta" data-delta="1" tabindex="-1">+</button>
         </div>
+        <div class="spx-defect-custom-modal" id="popDefectCustom" hidden>
+          <div class="spx-defect-custom-mask" data-act="defect-settings-custom-close" title="${zh ? "关闭" : "Close"}"></div>
+          <div class="spx-defect-custom-card" role="dialog" aria-modal="true" aria-label="${zh ? "自定义疵点类型" : "Custom defect types"}">
+            <div class="spx-defect-custom-head">
+              <div>
+                <div class="spx-defect-custom-title">${zh ? "自定义疵点类型" : "Custom Defect Types"}</div>
+                <div class="spx-defect-custom-tip">${zh ? "勾选表示该类型启动启用（写入 defects.IsDefaultCheck）" : "Checked = enabled at startup (defects.IsDefaultCheck)"}</div>
+              </div>
+              <button type="button" class="spx-defect-custom-x" data-act="defect-settings-custom-close" aria-label="close">&times;</button>
+            </div>
+            <div class="spx-defect-custom-actions">
+              <button type="button" class="ghost-btn compact" data-act="defect-settings-custom-select-all">${zh ? "全选" : "Select all"}</button>
+              <button type="button" class="ghost-btn compact" data-act="defect-settings-custom-select-none">${zh ? "全不选" : "Deselect"}</button>
+              <button type="button" class="ghost-btn compact" id="popDefectCustomFilterBtn" data-act="defect-settings-custom-filter">${zh ? "只显示已启用" : "Enabled only"}</button>
+              <span class="spx-records-sep"></span>
+              <button type="button" class="ghost-btn compact" data-act="defect-settings-custom-save">${zh ? "保存" : "Save"}</button>
+              <button type="button" class="ghost-btn compact" data-act="defect-settings-custom-close">${zh ? "关闭" : "Close"}</button>
+            </div>
+            <div class="spx-defect-custom-search">
+              <input id="popDefectCustomSearch" type="text" data-osk="1" placeholder="${zh ? "搜索疵点ID或名称…" : "Search ID or name…"}" data-act="defect-settings-custom-search" autocomplete="off" />
+            </div>
+            <div class="spx-defect-custom-scroll">
+              <table class="spx-table spx-defect-custom-table">
+                <thead>
+                  <tr>
+                    <th class="col-sw">${zh ? "启用" : "On"}</th>
+                    <th class="col-idx">ID</th>
+                    <th class="col-name">${zh ? "标准名称" : "Name"}</th>
+                    <th class="col-name">${zh ? "客户名称" : "Customer"}</th>
+                    <th class="col-sw">${zh ? "状态" : "Status"}</th>
+                  </tr>
+                </thead>
+                <tbody id="popDefectCustomBody">
+                  <tr><td colspan="5" class="spx-muted">${zh ? "正在加载…" : "Loading…"}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="spx-msg" id="popDefectCustomMsg"></p>
+          </div>
+        </div>
       </div>`;
   }
 
   function buildFinish(ctx) {
     const zh = ctx.lang === "zh-CN";
+    const lenU = normalizeLengthUnit(ctx.state && ctx.state.lengthUnit);
+    const lenShow = lengthFromMeters(Number(ctx.state && ctx.state.lengthM || 0), lenU).toFixed(1);
     return `
       <div class="spx-info">
         <div class="spx-info-icon" aria-hidden="true">!</div>
         <p class="spx-msg">${
           zh
-            ? `确认结束当前检验单 ${ctx.sheet.checkId}？已验 ${ctx.state.lengthM.toFixed(1)} m。`
-            : `Finish sheet ${ctx.sheet.checkId}? Inspected ${ctx.state.lengthM.toFixed(1)} m.`
+            ? `确认结束当前检验单 ${ctx.sheet.checkId}？已验 ${lenShow} ${lenU}。`
+            : `Finish sheet ${ctx.sheet.checkId}? Inspected ${lenShow} ${lenU}.`
         }</p>
         <div class="spx-actions center">
           ${ghostBtn(zh ? "取消" : "No", 'data-act="finish-no"')}
@@ -2685,9 +3234,19 @@
     const mainUrl = ctx.aidedMainImageUrl || "";
     // 全图不画疵点框（选中/未选中都不显示）
     const marks = "";
+    const zoomPct = Math.round((Number(st.aidedZoom) > 0 ? Number(st.aidedZoom) : 1) * 100);
     const mainImg = mainUrl
-      ? `<img class="spx-aided-main-img" src="${mainUrl}" alt=""/>`
+      ? `<img class="spx-aided-main-img" src="${mainUrl}" alt="" draggable="false"/>`
       : `<span class="spx-aided-main-hint">${zh ? "暂无全图" : "No frame"}</span>`;
+    const zoomed = zoomPct > 100;
+    const zoomBar = mainUrl
+      ? `<div class="spx-aided-zoombar${zoomed ? " is-visible" : ""}" id="spxAidedZoomBar" title="${zh ? "滚轮缩放，拖拽平移，右键复位" : "Wheel zoom, drag pan, right-click reset"}">
+            <button type="button" class="ghost-btn compact" data-act="aided-zoom" data-delta="-0.15" aria-label="-">−</button>
+            <span class="spx-aided-zoomlab mono" id="spxAidedZoom">${zoomPct}%</span>
+            <button type="button" class="ghost-btn compact" data-act="aided-zoom" data-delta="0.15" aria-label="+">+</button>
+            <button type="button" class="ghost-btn compact" data-act="aided-zoom-reset">${zh ? "复位" : "Reset"}</button>
+          </div>`
+      : "";
     // 对齐 DefectAidedSelection.h + DefectCard：选择：/推荐：文案与 268 卡布局
     const cardsHtml = cards.length
       ? cards.map((c) => {
@@ -2713,7 +3272,7 @@
           </div>
           <div class="spx-aided-typerow">
             <span class="spx-aided-cap">${zh ? "推荐：" : "Rec:"}</span>
-            <button type="button" class="spx-aided-typechip" data-act="aided-type" data-id="${c.id}">${c.title}</button>
+            <button type="button" class="spx-aided-typechip" data-act="type-open" data-source="aided" data-id="${c.id}">${c.title}</button>
             <span class="spx-aided-score">${c.grade || ""}</span>
           </div>
         </article>`;
@@ -2730,10 +3289,21 @@
               <button type="button" class="spx-aided-filter-btn${!showAll ? " active" : ""}" data-act="aided-show-valid"${dis}>${zh ? "有效" : "Valid"}</button>
               <button type="button" class="spx-aided-filter-btn${showAll ? " active" : ""}" data-act="aided-show-all"${dis}>${zh ? "所有" : "All"}</button>
             </div>`;
+    const tpAided = typePickerState(ctx);
+    const aidedPickId = tpAided.targetId;
+    const aidedPick = (Array.isArray(ctx.aidedDefectsAll) ? ctx.aidedDefectsAll : cards)
+      .find((c) => Number(c.id) === Number(aidedPickId));
+    const typeModalHtml = buildDefectTypePickerModal(ctx, {
+      open: !!(tpAided.open && tpAided.source === "aided"),
+      filter: tpAided.filter || "",
+      selectedName: aidedPick ? aidedPick.title : "",
+      selectedId: aidedPick ? (aidedPick.defectId || "") : "",
+      showPreview: !!st.isEnableImagePreview,
+    });
     return `
       <div class="spx-aided${busy ? " is-busy" : ""}">
         <div class="spx-aided-preview">
-          <div class="spx-aided-main">${mainImg}${marks}</div>
+          <div class="spx-aided-main" id="spxAidedMain">${zoomBar}${mainImg}${marks}</div>
           <div class="spx-aided-ruler"><span>0</span><span>300</span><span>600</span><span>900</span><span>1200 mm</span></div>
         </div>
         <div class="spx-aided-mainrow">
@@ -2758,6 +3328,7 @@
             </div>
           </aside>
         </div>
+        ${typeModalHtml}
       </div>`;
   }
 
@@ -2776,6 +3347,128 @@
         ];
   }
 
+  function defectTypeGroupsOf(ctx) {
+    if (ctx.artificalLabelGroups && ctx.artificalLabelGroups.length) return ctx.artificalLabelGroups;
+    const items = (ctx.editDefectParams && ctx.editDefectParams.length)
+      ? ctx.editDefectParams
+      : (ctx.artificalDefectParams || []);
+    if (items.length) {
+      const byGroup = new Map();
+      items.forEach((p) => {
+        const g = (p && p.group) || "";
+        if (!byGroup.has(g)) byGroup.set(g, []);
+        byGroup.get(g).push({
+          code: p.id || p.code || "",
+          name: p.display || p.name || "",
+          sampleImage: p.sampleImage || "",
+          value: p.value || p.display || p.name || "",
+          id: p.id || p.code || "",
+        });
+      });
+      return Array.from(byGroup.keys()).map((g) => ({
+        group: g || "全部",
+        items: byGroup.get(g),
+      }));
+    }
+    return defaultArtificalLabelGroups((ctx.lang || "").startsWith("zh"));
+  }
+
+  function defectSampleImageUrl(path) {
+    if (!path) return "";
+    const s = String(path).trim();
+    if (!s) return "";
+    if (s.indexOf("data:") === 0 || s.indexOf("http://") === 0 || s.indexOf("https://") === 0) return s;
+    const base = (global.SpxApi && global.SpxApi.base) || "";
+    return base + "/api/v0/defects/image?path=" + encodeURIComponent(s);
+  }
+
+  /**
+   * 共用疵点类型选择弹窗（对齐 artifical_add_defect.html #labelModal / DefectCard TypePicker）
+   * opts: { open, filter, selectedName, selectedId, showPreview }
+   */
+  function buildDefectTypePickerModal(ctx, opts) {
+    const o = opts || {};
+    if (!o.open) return "";
+    const zh = (ctx.lang || "").startsWith("zh");
+    const groups = defectTypeGroupsOf(ctx);
+    const filter = o.filter || "";
+    const showPreview = !!o.showPreview;
+    const namedGroups = groups.filter((g) => g && g.group);
+    const showFilter = namedGroups.length > 1;
+    const filterChips = showFilter
+      ? [`<button type="button" class="spx-art-chip ${!filter ? "active" : ""}" data-act="type-filter" data-group="">${zh ? "全部" : "All"}</button>`]
+          .concat(namedGroups.map((g) =>
+            `<button type="button" class="spx-art-chip ${filter === g.group ? "active" : ""}" data-act="type-filter" data-group="${g.group}">${g.group} ${(g.items || []).length}</button>`
+          )).join("")
+      : "";
+    const visible = filter ? groups.filter((g) => g.group === filter) : groups;
+    const filtered = visible.length <= 1;
+    const visibleItems = visible.reduce((n, g) => n + ((g.items && g.items.length) || 0), 0);
+    const dense = filtered && visibleItems >= 10;
+    const manyCols = !filtered && visible.length >= 6;
+    let indexNo = 1;
+    // 全量编号与 HTML 一致：按未筛选顺序编号
+    const indexMap = new Map();
+    groups.forEach((g) => {
+      (g.items || []).forEach((it) => {
+        const key = (typeof it === "string" ? it : (it.name || it.value || "")) + "::" + (it && it.code ? it.code : "");
+        if (!indexMap.has(key)) indexMap.set(key, indexNo++);
+      });
+    });
+    const cards = visible.map((g) => {
+      const items = (g.items || []).map((it) => {
+        const name = typeof it === "string" ? it : (it.name || it.value || "");
+        const code = typeof it === "string" ? "" : (it.code || it.id || "");
+        const value = typeof it === "string" ? it : (it.value || it.name || "");
+        const sample = typeof it === "string" ? "" : (it.sampleImage || "");
+        const key = name + "::" + code;
+        const no = indexMap.get(key) || "";
+        const selected = (o.selectedId && code && String(o.selectedId) === String(code))
+          || (o.selectedName && (name === o.selectedName || value === o.selectedName));
+        const thumbUrl = showPreview ? defectSampleImageUrl(sample) : "";
+        const thumb = showPreview
+          ? (thumbUrl
+            ? `<img class="spx-art-type-thumb" src="${thumbUrl}" alt="" loading="lazy" />`
+            : `<span class="spx-art-type-thumb is-empty">${zh ? "暂无预览" : "No preview"}</span>`)
+          : "";
+        return `<button type="button" class="spx-art-type ${selected ? "selected" : ""}" data-act="type-pick" data-label="${name}" data-value="${value}" data-id="${code}" title="${no} ${name}">
+          ${thumb}
+          <span class="spx-art-type-meta">
+            <span class="spx-art-type-code">#${no}</span>
+            <span class="spx-art-type-name">${name}</span>
+          </span>
+        </button>`;
+      }).join("");
+      return `<section class="spx-art-type-group" data-group="${g.group || ""}">
+        ${g.group ? `<div class="spx-art-type-group-title">${g.group}<span class="spx-art-type-count">${(g.items || []).length}</span></div>` : ""}
+        <div class="spx-art-type-grid">${items}</div>
+      </section>`;
+    }).join("");
+    const wrapCls = [
+      "spx-art-type-wrap",
+      showPreview ? "" : "is-no-image-preview",
+      filtered ? "is-group-filtered" : "",
+      dense ? "is-dense" : "",
+      manyCols ? "is-many-cols" : "",
+    ].filter(Boolean).join(" ");
+    return `
+      <div class="spx-art-modal active" data-type-picker>
+        <div class="spx-art-modal-card wide type-picker">
+          <div class="spx-art-modal-head">
+            <span>${zh ? "请选择标签" : "Select Label"}</span>
+            <button type="button" class="spx-art-modal-x" data-act="type-close">&times;</button>
+          </div>
+          ${showFilter ? `<div class="spx-art-filter">${filterChips}</div>` : ""}
+          <div class="${wrapCls}">${cards || `<div class="spx-muted">${zh ? "暂无类型" : "No types"}</div>`}</div>
+        </div>
+      </div>`;
+  }
+
+  function typePickerState(ctx) {
+    const st = (ctx && ctx.state) || {};
+    return st.typePicker || { open: false, source: "", targetId: null, filter: "" };
+  }
+
   /**
    * artifical_add_defect.html — SPX 人工添加疵点
    * 左：模式/图像切换/缩放 + 画布；右：缩略图 + ROI 表 + 预览/选标签；底：状态栏；层：标签弹窗 / 确认弹窗
@@ -2787,13 +3480,11 @@
     const selectedId = st.artificalRoiId;
     const mode = st.artificalMode || "rect";
     const imgType = st.artificalImgType == null ? 0 : Number(st.artificalImgType);
-    const labelModal = !!st.artificalLabelModal;
-    const labelFilter = st.artificalLabelFilter || "";
+    const tp = typePickerState(ctx);
+    const labelModal = !!st.artificalLabelModal || (tp.open && tp.source === "add");
+    const labelFilter = (tp.open && tp.source === "add" ? tp.filter : null) || st.artificalLabelFilter || "";
     const confirmKind = st.artificalConfirm || null; // finish | clear | delete
     const confirmId = st.artificalConfirmId;
-    const groups = (ctx.artificalLabelGroups && ctx.artificalLabelGroups.length)
-      ? ctx.artificalLabelGroups
-      : defaultArtificalLabelGroups(zh);
 
     const rows = rois.map((r) => {
       const active = r.id === selectedId ? "active" : "";
@@ -2831,31 +3522,13 @@
       ? `${zh ? "尺寸" : "Size"}: ${Number(sel.w).toFixed(0)}×${Number(sel.h).toFixed(0)}`
       : `${zh ? "尺寸" : "Size"}: -`;
     const labelBtnText = (sel && sel.label) ? sel.label : (zh ? "请选择标签" : "Select label");
-
-    const filterChips = [`<button type="button" class="spx-art-chip ${!labelFilter ? "active" : ""}" data-act="art-label-filter" data-group="">${zh ? "全部" : "All"}</button>`]
-      .concat(groups.map((g) =>
-        `<button type="button" class="spx-art-chip ${labelFilter === g.group ? "active" : ""}" data-act="art-label-filter" data-group="${g.group}">${g.group}</button>`
-      )).join("");
-
-    const visibleGroups = labelFilter ? groups.filter((g) => g.group === labelFilter) : groups;
-    const labelCards = visibleGroups.map((g) => {
-      const items = (g.items || []).map((it) => {
-        const name = typeof it === "string" ? it : (it.name || "");
-        const code = typeof it === "string" ? "" : (it.code || "");
-        const selected = sel && sel.label === name ? "selected" : "";
-        return `<button type="button" class="spx-art-type ${selected}" data-act="art-label" data-label="${name}">
-          <span class="spx-art-type-thumb is-empty"></span>
-          <span class="spx-art-type-meta">
-            ${code ? `<span class="spx-art-type-code">${code}</span>` : ""}
-            <span class="spx-art-type-name">${name}</span>
-          </span>
-        </button>`;
-      }).join("");
-      return `<div class="spx-art-type-group">
-        <div class="spx-art-type-group-title">${g.group}<span class="spx-art-type-count">${(g.items || []).length}</span></div>
-        <div class="spx-art-type-grid">${items}</div>
-      </div>`;
-    }).join("");
+    const labelModalHtml = buildDefectTypePickerModal(ctx, {
+      open: labelModal,
+      filter: labelFilter,
+      selectedName: sel ? sel.label : "",
+      selectedId: sel ? sel.defectId : "",
+      showPreview: !!st.isEnableImagePreview,
+    });
 
     let confirmHtml = "";
     if (confirmKind) {
@@ -2886,18 +3559,6 @@
           </div>
         </div>`;
     }
-
-    const labelModalHtml = `
-      <div class="spx-art-modal ${labelModal ? "active" : ""}" id="spxArtLabelModal">
-        <div class="spx-art-modal-card wide">
-          <div class="spx-art-modal-head">
-            <span>${zh ? "请选择标签" : "Select Label"}</span>
-            <button type="button" class="spx-art-modal-x" data-act="art-label-close">&times;</button>
-          </div>
-          <div class="spx-art-filter">${filterChips}</div>
-          <div class="spx-art-type-wrap">${labelCards}</div>
-        </div>
-      </div>`;
 
     return `
       <div class="spx-art">
@@ -2940,7 +3601,7 @@
             <div class="mono" id="spxArtPreviewInfo">${previewPos}</div>
             <div class="mono">${previewSize}</div>
             <div class="spx-art-label-row">
-              <button type="button" class="ghost-btn" data-act="art-label-open" ${sel ? "" : "disabled"}>${labelBtnText}</button>
+              <button type="button" class="ghost-btn" data-act="type-open" data-source="add" ${sel ? "" : "disabled"}>${labelBtnText}</button>
             </div>
           </div>
           <div class="spx-actions split">
@@ -3112,7 +3773,6 @@
       groupsHtml = `<div class="spx-muted">${zh ? "没有可编辑的疵点" : "No defects to edit"}</div>`;
     }
 
-    const typeOpts = editDefectTypeOptions(ctx, sel ? sel.title : "", sel ? sel.defectID : "");
     const gradeOpts = gradeOptions(sel ? sel.grade : "I");
     const xVal = sel ? Number(sel.xMm).toFixed(1) : "";
     const yVal = sel ? Number(sel.yMm).toFixed(1) : "";
@@ -3120,21 +3780,34 @@
     const widVal = sel ? Number(sel.widthMm).toFixed(1) : "";
     const areaVal = sel ? Number(sel.areaMm2).toFixed(1) : "";
     const descVal = sel ? (sel.desc || "") : "";
+    const typeBtnText = sel
+      ? (sel.title || sel.titleRaw || (zh ? "请选择标签" : "Select label"))
+      : (zh ? "请选择标签" : "Select label");
     const previewHtml = sel
       ? (sel.localImgBase64
         ? `<img src="data:image/png;base64,${sel.localImgBase64}" alt="" style="max-width:100%;max-height:100%;object-fit:contain" />`
         : (zh ? "ROI 预览" : "Preview"))
       : (zh ? "暂无预览" : "No preview");
+    const tpEdit = typePickerState(ctx);
+    const typeModalHtml = buildDefectTypePickerModal(ctx, {
+      open: !!(tpEdit.open && tpEdit.source === "edit"),
+      filter: tpEdit.filter || "",
+      selectedName: sel ? (sel.title || sel.titleRaw || "") : "",
+      selectedId: sel ? (sel.defectID || sel.defectId || "") : "",
+      showPreview: !!st.isEnableImagePreview,
+    });
 
     let confirmHtml = "";
     if (confirmKind) {
       const titles = {
         delete: zh ? "删除确认" : "Confirm Delete",
         finish: zh ? "完成确认" : "Confirm Finish",
+        type: zh ? "更改类型" : "Change Type",
       };
       const msgs = {
         delete: zh ? "确定要删除此疵点吗？" : "Delete this defect?",
         finish: zh ? "完成编辑并关闭？" : "Finish editing and close?",
+        type: zh ? "确定要更改类型吗？" : "Change defect type?",
       };
       confirmHtml = `
         <div class="spx-art-modal active" data-edit-confirm>
@@ -3165,7 +3838,9 @@
           <div class="spx-section">${zh ? "疵点信息" : "Defect Info"}</div>
           <div class="spx-edit-form">
             <label>${zh ? "疵点类型" : "Type"}</label>
-            <select id="spxEditType" data-osk="0" ${sel ? "" : "disabled"}>${typeOpts}</select>
+            <button type="button" class="ghost-btn spx-edit-type-btn" id="spxEditTypeBtn" data-act="type-open" data-source="edit" ${sel ? "" : "disabled"}>${typeBtnText}</button>
+            <input type="hidden" id="spxEditTypeName" value="${sel ? (sel.titleRaw || sel.title || "") : ""}" />
+            <input type="hidden" id="spxEditTypeId" value="${sel ? (sel.defectID || sel.defectId || "") : ""}" />
             <label>${zh ? "X坐标(mm)" : "X(mm)"}</label>
             <input id="spxEditX" type="number" step="0.1" min="0" value="${xVal}" data-osk="0" disabled />
             <label>${zh ? "Y坐标(mm)" : "Y(mm)"}</label>
@@ -3187,6 +3862,7 @@
             <button type="button" class="run-btn running" data-act="edit-finish">${zh ? "完成" : "Finish"}</button>
           </div>
         </aside>
+        ${typeModalHtml}
         ${confirmHtml}
         <div class="spx-art-saving" id="spxEditSaving" hidden>
           <div class="spx-art-progress"></div>
@@ -3231,22 +3907,63 @@
       </div>`;
   }
 
-  function debugToolTabs(zh) {
-    // 设备硬件调试：CustomUIV3/tuning SPX 页（构建拷贝到 /customuiv3/tuning/）
+  function debugToolGroups(zh) {
+    // 按设备类型分组；灯带按 LightBandDeviceType 拆成 Type1 / Type2 两页
     return [
-      { id: "plc", label: zh ? "PLC" : "PLC", path: "/customuiv3/tuning/plc.html" },
-      { id: "alarms", label: zh ? "报警" : "Alarms", path: "/customuiv3/tuning/alarms.html" },
-      { id: "widthsensor", label: zh ? "幅宽传感器" : "Width Sensor", path: "/customuiv3/tuning/widthsensor.html" },
-      { id: "camera", label: zh ? "相机" : "Camera", path: "/customuiv3/tuning/camera.html" },
-      { id: "light3", label: zh ? "光源" : "Light3", path: "/customuiv3/tuning/light3.html" },
-      { id: "printer", label: zh ? "打印机" : "Printer", path: "/customuiv3/tuning/printer.html" },
-      { id: "touchpad", label: zh ? "触摸板" : "Touchpad", path: "/customuiv3/tuning/touchpad.html" },
-      { id: "lightband", label: zh ? "灯带" : "Light Band", path: "/customuiv3/tuning/lightband.html" },
-      { id: "nonstop", label: zh ? "不停机贴标" : "Nonstop Label", path: "/customuiv3/tuning/nonstop.html" },
-      { id: "label", label: zh ? "贴标" : "Label", path: "/customuiv3/tuning/label.html" },
-      { id: "colorreader", label: zh ? "取色仪" : "Color Reader", path: "/customuiv3/tuning/colorreader.html" },
-      { id: "devices", label: zh ? "设备信息" : "Devices", path: "/customuiv3/tuning/devices.html" },
+      {
+        group: zh ? "总览" : "Overview",
+        tabs: [
+          { id: "devices", label: zh ? "设备总览" : "Health", path: "/customuiv3/tuning/devices.html" },
+        ],
+      },
+      {
+        group: zh ? "控制" : "Control",
+        tabs: [
+          { id: "plc", label: "PLC", path: "/customuiv3/tuning/plc.html" },
+          { id: "alarms", label: zh ? "报警" : "Alarms", path: "/customuiv3/tuning/alarms.html" },
+        ],
+      },
+      {
+        group: zh ? "视觉" : "Vision",
+        tabs: [
+          { id: "camera", label: zh ? "相机" : "Camera", path: "/customuiv3/tuning/camera.html" },
+          { id: "detector", label: zh ? "检测设置" : "Detection", path: "/customuiv3/tuning/detector.html" },
+          { id: "color", label: zh ? "色差" : "Color Diff", path: "/customuiv3/tuning/color.html" },
+          { id: "widthsensor", label: zh ? "幅宽传感器" : "Width Sensor", path: "/customuiv3/tuning/widthsensor.html" },
+        ],
+      },
+      {
+        group: zh ? "光源" : "Lighting",
+        tabs: [
+          { id: "light", label: zh ? "串口光源" : "Serial Light", path: "/customuiv3/tuning/light.html" },
+          { id: "light3", label: zh ? "频闪光源" : "Strobe Light", path: "/customuiv3/tuning/light3.html" },
+          { id: "lightband", label: zh ? "灯带·创联" : "LB Type1", path: "/customuiv3/tuning/lightband.html" },
+          { id: "lightband2", label: zh ? "灯带·STM32" : "LB Type2", path: "/customuiv3/tuning/lightband2.html" },
+        ],
+      },
+      {
+        group: zh ? "贴标出票" : "Labeling",
+        tabs: [
+          { id: "printer", label: zh ? "打印机" : "Printer", path: "/customuiv3/tuning/printer.html" },
+          { id: "zpl", label: zh ? "ZPL 打印" : "ZPL Print", path: "/customuiv3/tuning/zpl.html" },
+          { id: "label", label: zh ? "贴标" : "Label", path: "/customuiv3/tuning/label.html" },
+          { id: "nonstop", label: zh ? "不停机贴标" : "Nonstop Label", path: "/customuiv3/tuning/nonstop.html" },
+        ],
+      },
+      {
+        group: zh ? "人机" : "HMI",
+        tabs: [
+          { id: "touchpad", label: zh ? "触摸板" : "Touchpad", path: "/customuiv3/tuning/touchpad.html" },
+          { id: "colorreader", label: zh ? "取色仪" : "Color Reader", path: "/customuiv3/tuning/colorreader.html" },
+        ],
+      },
     ];
+  }
+
+  function debugToolTabs(zh) {
+    return debugToolGroups(zh).reduce(function (acc, g) {
+      return acc.concat(g.tabs || []);
+    }, []);
   }
 
   function debugToolUrl(path, lang) {
@@ -3257,15 +3974,22 @@
 
   function buildDebug(ctx) {
     const zh = ctx.lang === "zh-CN";
+    const groups = debugToolGroups(zh);
     const tabs = debugToolTabs(zh);
     const active = (ctx.debugTabId && tabs.some((t) => t.id === ctx.debugTabId))
       ? ctx.debugTabId
       : tabs[0].id;
-    const tabBtns = tabs
-      .map(
-        (t) =>
-          `<button type="button" class="ghost-btn compact ${t.id === active ? "active" : ""}" data-act="debug-tab" data-tab="${t.id}" data-src="${debugToolUrl(t.path, ctx.lang)}">${t.label}</button>`
-      )
+    const tabBtns = groups
+      .map(function (g, gi) {
+        const btns = (g.tabs || [])
+          .map(
+            (t) =>
+              `<button type="button" class="ghost-btn compact ${t.id === active ? "active" : ""}" data-act="debug-tab" data-tab="${t.id}" data-src="${debugToolUrl(t.path, ctx.lang)}">${t.label}</button>`
+          )
+          .join("");
+        const sep = gi > 0 ? `<span class="spx-debug-sep" aria-hidden="true"></span>` : "";
+        return sep + btns;
+      })
       .join("");
     const panes = tabs
       .map((t) => {
@@ -3278,7 +4002,11 @@
       .join("");
     return `
       <div class="spx-debug">
-        <div class="spx-debug-tabs" id="popDebugTabs">${tabBtns}</div>
+        <div class="spx-debug-nav" id="popDebugNav">
+          <button type="button" class="ghost-btn compact spx-debug-nav-btn" data-act="debug-tab-scroll-prev" aria-label="${zh ? "向左滚动" : "Scroll left"}">‹</button>
+          <div class="spx-debug-tabs" id="popDebugTabs">${tabBtns}</div>
+          <button type="button" class="ghost-btn compact spx-debug-nav-btn" data-act="debug-tab-scroll-next" aria-label="${zh ? "向右滚动" : "Scroll right"}">›</button>
+        </div>
         <div class="spx-debug-frames" id="popDebugFrames">${panes}</div>
       </div>`;
   }
@@ -3349,10 +4077,30 @@
       const n = Number(v);
       return Number.isFinite(n) ? n.toFixed(1) : "—";
     };
-    const fabric = st.widthCm != null ? st.widthCm : plc.fabric_width;
-    const plcW = plc.plc_fabric_width != null ? plc.plc_fabric_width : fabric;
-    const left = plc.width_sensor_left != null ? plc.width_sensor_left : st.widthSensorLeft;
-    const right = plc.width_sensor_right != null ? plc.width_sensor_right : st.widthSensorRight;
+    const fabric =
+      st.widthCm != null
+        ? st.widthCm
+        : plc.fabric_width != null
+          ? plc.fabric_width
+          : null;
+    const plcW =
+      plc.plc_fabric_width != null
+        ? plc.plc_fabric_width
+        : st.plcFabricWidth != null
+          ? st.plcFabricWidth
+          : fabric;
+    const left =
+      plc.width_sensor_left != null
+        ? plc.width_sensor_left
+        : st.widthSensorLeft != null
+          ? st.widthSensorLeft
+          : st.width_sensor_left;
+    const right =
+      plc.width_sensor_right != null
+        ? plc.width_sensor_right
+        : st.widthSensorRight != null
+          ? st.widthSensorRight
+          : st.width_sensor_right;
     const visionOn = wsSettingOn(sv, "IsEnableImageWidth", false);
     const followOn = wsSettingOn(sv, "IsEnableWidthDetectorEdge", false);
     const showEdge = wsSettingOn(sv, "IsEnabledShowEdge", false);
@@ -3895,6 +4643,7 @@
     this._placeMode = null;
     this._placeTrigger = null;
     this.settingsTabId = null; // 系统设置当前 tab，切换弹窗后恢复
+    this.settingsSecId = null; // 系统设置当前子分类（分区 id）
     this.debugTabId = null; // 硬件调试当前 tab
     this._defStepEditId = ""; // 疵点设置：当前弹出编辑的尺寸字段 id
 
@@ -4049,6 +4798,8 @@
     if (this._defStepEditId) this._closeDefStepEditor();
     if (this.osk) this.osk.hide();
     this._disposeTool();
+    if (global.SpxPlcSys && typeof global.SpxPlcSys.unmount === "function") global.SpxPlcSys.unmount();
+    if (global.SpxPlcIo && typeof global.SpxPlcIo.unmount === "function") global.SpxPlcIo.unmount();
     this.activeKey = null;
     this.triggerEl = null;
     this._placeMode = null;
@@ -4066,12 +4817,158 @@
     this._toolApi = null;
   };
 
-  /** 工具弹窗：画布交互（人工疵点 / 净幅宽） */
+  /** 工具弹窗：画布交互（人工疵点 / 净幅宽 / 贴标全图缩放） */
   SpxPopupHost.prototype._initTool = function (key) {
     this._disposeTool();
     if (key === "artificalAddDefect") this._initArtificalAddDefect();
     else if (key === "artificalEditDefect" || key === "defectEdit") this._initArtificalEditDefect();
     else if (key === "artificalAddWidth") this._initArtificalAddWidth();
+    else if (key === "defectAidedSelection") this._initDefectAidedZoom();
+  };
+
+  /** 疵点辅助选择：全图滚轮缩放 + 拖拽平移 */
+  SpxPopupHost.prototype._initDefectAidedZoom = function () {
+    const viewport = this.bodyEl && this.bodyEl.querySelector("#spxAidedMain");
+    const img = viewport && viewport.querySelector(".spx-aided-main-img");
+    const zoomLab = this.bodyEl && this.bodyEl.querySelector("#spxAidedZoom");
+    const zoomBar = this.bodyEl && this.bodyEl.querySelector("#spxAidedZoomBar");
+    if (!viewport || !img) return;
+
+    const host = this;
+    const clampZoom = (z) => Math.min(6, Math.max(1, z));
+    const stateOf = () => {
+      const c = host.getCtx() || {};
+      if (!c.state) c.state = {};
+      return c.state;
+    };
+    const read = () => {
+      const st = stateOf();
+      return {
+        zoom: clampZoom(Number(st.aidedZoom) > 0 ? Number(st.aidedZoom) : 1),
+        panX: Number(st.aidedPanX) || 0,
+        panY: Number(st.aidedPanY) || 0,
+      };
+    };
+    const write = (zoom, panX, panY) => {
+      const st = stateOf();
+      st.aidedZoom = zoom;
+      st.aidedPanX = panX;
+      st.aidedPanY = panY;
+    };
+    const apply = () => {
+      const { zoom, panX, panY } = read();
+      const zoomed = zoom > 1.001;
+      img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+      viewport.classList.toggle("is-zoomed", zoomed);
+      if (zoomLab) zoomLab.textContent = `${Math.round(zoom * 100)}%`;
+      if (zoomBar) zoomBar.classList.toggle("is-visible", zoomed);
+    };
+
+    // 换图时复位缩放（同弹窗内 refresh 换图）
+    const mainUrl = (host.getCtx() && host.getCtx().aidedMainImageUrl) || img.getAttribute("src") || "";
+    if (host._aidedZoomUrl && host._aidedZoomUrl !== mainUrl) {
+      write(1, 0, 0);
+    }
+    host._aidedZoomUrl = mainUrl;
+
+    img.style.transformOrigin = "0 0";
+    img.draggable = false;
+    apply();
+
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    let pointerId = null;
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = viewport.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const cur = read();
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      const nextZoom = clampZoom(cur.zoom * factor);
+      if (Math.abs(nextZoom - cur.zoom) < 1e-6) return;
+      const nextPanX = cx - (cx - cur.panX) * (nextZoom / cur.zoom);
+      const nextPanY = cy - (cy - cur.panY) * (nextZoom / cur.zoom);
+      write(nextZoom, nextPanX, nextPanY);
+      apply();
+    };
+
+    const onDown = (e) => {
+      if (e.button != null && e.button !== 0) return;
+      if (e.target && e.target.closest && e.target.closest(".spx-aided-zoombar")) return;
+      const cur = read();
+      if (cur.zoom <= 1.001) return;
+      dragging = true;
+      pointerId = e.pointerId;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      viewport.classList.add("is-panning");
+      try { viewport.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      e.preventDefault();
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      if (pointerId != null && e.pointerId !== pointerId) return;
+      const cur = read();
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      write(cur.zoom, cur.panX + dx, cur.panY + dy);
+      apply();
+    };
+    const onUp = (e) => {
+      if (!dragging) return;
+      if (pointerId != null && e.pointerId !== pointerId) return;
+      dragging = false;
+      pointerId = null;
+      viewport.classList.remove("is-panning");
+      try { viewport.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    };
+    const resetZoomView = () => {
+      write(1, 0, 0);
+      apply();
+    };
+    const onContextMenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resetZoomView();
+    };
+
+    viewport.addEventListener("wheel", onWheel, { passive: false });
+    viewport.addEventListener("pointerdown", onDown);
+    viewport.addEventListener("pointermove", onMove);
+    viewport.addEventListener("pointerup", onUp);
+    viewport.addEventListener("pointercancel", onUp);
+    viewport.addEventListener("contextmenu", onContextMenu);
+
+    this._toolApi = {
+      setZoom(delta) {
+        const cur = read();
+        const rect = viewport.getBoundingClientRect();
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+        const nextZoom = clampZoom(cur.zoom + Number(delta || 0));
+        const nextPanX = cx - (cx - cur.panX) * (nextZoom / cur.zoom);
+        const nextPanY = cy - (cy - cur.panY) * (nextZoom / cur.zoom);
+        write(nextZoom, nextZoom <= 1.001 ? 0 : nextPanX, nextZoom <= 1.001 ? 0 : nextPanY);
+        apply();
+      },
+      resetZoom() {
+        resetZoomView();
+      },
+    };
+    this._toolCleanup = () => {
+      viewport.removeEventListener("wheel", onWheel);
+      viewport.removeEventListener("pointerdown", onDown);
+      viewport.removeEventListener("pointermove", onMove);
+      viewport.removeEventListener("pointerup", onUp);
+      viewport.removeEventListener("pointercancel", onUp);
+      viewport.removeEventListener("contextmenu", onContextMenu);
+    };
   };
 
   SpxPopupHost.prototype._initArtificalAddDefect = function () {
@@ -5433,8 +6330,10 @@
     if (this.osk) this.osk.hide();
     const prevFocus = document.activeElement;
     const ctx = this.getCtx() || {};
-    if (key === "systemSettings" && this.settingsTabId)
+    if (key === "systemSettings" && this.settingsTabId) {
       ctx.settingsTabId = this.settingsTabId;
+      if (this.settingsSecId) ctx.settingsSecId = this.settingsSecId;
+    }
     if (key === "debug" && this.debugTabId)
       ctx.debugTabId = this.debugTabId;
     this._defStepEditId = "";
@@ -5442,6 +6341,7 @@
     this.triggerEl = trigger || null;
     this.titleEl.textContent = key === "login" ? "" : titleOf(key, ctx.lang);
     this.bodyEl.innerHTML = buildBody(key, ctx);
+    if (key === "unwind") this._afterPlcTestBody();
 
     const mode = this.modeFor(key);
     this._placeMode = mode;
@@ -5457,7 +6357,11 @@
     if (TOOL_KEYS.has(key)) {
       requestAnimationFrame(() => this._initTool(key));
     }
+    if (key === "systemSettings") this._scrollSettingsSec();
     if (key === "login") this._syncLoginType();
+    if (key === "defectSettings") {
+      requestAnimationFrame(() => this._syncDefectClothNav(true));
+    }
 
     const langSel = this.bodyEl.querySelector("#popSettingsLang");
     if (langSel) langSel.value = ctx.lang;
@@ -5479,22 +6383,213 @@
     }
   };
 
+  SpxPopupHost.prototype._scrollDebugTabIntoView = function (tab) {
+    const strip = this.bodyEl && this.bodyEl.querySelector("#popDebugTabs");
+    if (!strip) return;
+    const btn = strip.querySelector('[data-act="debug-tab"][data-tab="' + tab + '"]');
+    if (!btn) return;
+    const left = btn.offsetLeft;
+    const right = left + btn.offsetWidth;
+    const viewL = strip.scrollLeft;
+    const viewR = viewL + strip.clientWidth;
+    if (left < viewL) strip.scrollLeft = Math.max(0, left - 8);
+    else if (right > viewR) strip.scrollLeft = right - strip.clientWidth + 8;
+  };
+
+  SpxPopupHost.prototype._activateDebugTab = function (tab, srcHint) {
+    if (!this.bodyEl || !tab) return;
+    this.debugTabId = tab;
+    this.bodyEl.querySelectorAll("#popDebugTabs [data-act='debug-tab']").forEach((b) =>
+      b.classList.toggle("active", b.getAttribute("data-tab") === tab)
+    );
+    this.bodyEl.querySelectorAll("[data-debug-pane]").forEach((p) => {
+      const on = p.getAttribute("data-debug-pane") === tab;
+      p.hidden = !on;
+      if (!on) return;
+      const frame = p.querySelector("iframe.spx-debug-frame");
+      if (frame && !frame.getAttribute("src")) {
+        const src = frame.getAttribute("data-src") || srcHint;
+        if (src) frame.setAttribute("src", src);
+      }
+    });
+    this._scrollDebugTabIntoView(tab);
+  };
+
+  SpxPopupHost.prototype._scrollDebugTabs = function (dir) {
+    const strip = this.bodyEl && this.bodyEl.querySelector("#popDebugTabs");
+    if (!strip) return;
+    const step = Math.max(120, Math.floor(strip.clientWidth * 0.6));
+    const max = Math.max(0, strip.scrollWidth - strip.clientWidth);
+    const next = Math.max(0, Math.min(max, strip.scrollLeft + dir * step));
+    if (typeof strip.scrollTo === "function") {
+      try {
+        strip.scrollTo({ left: next, behavior: "smooth" });
+        return;
+      } catch (e) { /* fall through */ }
+    }
+    strip.scrollLeft = next;
+  };
+
+  SpxPopupHost.prototype._applySettingsNav = function (tab, sec) {
+    if (!this.bodyEl) return;
+    this.bodyEl.querySelectorAll("#popSettingsTabs .spx-settings-nav-group").forEach((g) => {
+      const id = g.getAttribute("data-nav-group");
+      if (id !== tab) {
+        g.classList.remove("is-open");
+        return;
+      }
+      if (sec) {
+        g.classList.add("is-open");
+      } else {
+        // 点父分类：切换展开/折叠（默认折叠）
+        g.classList.toggle("is-open");
+      }
+    });
+    this.bodyEl.querySelectorAll("#popSettingsTabs .spx-settings-nav-main").forEach((b) => {
+      b.classList.toggle("active", b.getAttribute("data-tab") === tab);
+    });
+    this.bodyEl.querySelectorAll("#popSettingsTabs .spx-settings-sub").forEach((b) => {
+      b.classList.toggle("active", !!sec && b.getAttribute("data-sec") === sec);
+    });
+  };
+
+  SpxPopupHost.prototype._scrollSettingsSec = function (sec) {
+    if (!this.bodyEl) return;
+    const sid = sec || this.settingsSecId || "";
+    const scroller = this.bodyEl.querySelector("#popSettingsBody");
+    if (!sid) {
+      if (scroller) scroller.scrollTop = 0;
+      return;
+    }
+    const target = this.bodyEl.querySelector('[data-sec-id="' + sid + '"]') || this.bodyEl.querySelector("#" + sid);
+    if (!target) return;
+    requestAnimationFrame(() => {
+      try {
+        target.scrollIntoView({ block: "start", behavior: "smooth" });
+      } catch (_) {
+        if (scroller) scroller.scrollTop = Math.max(0, target.offsetTop - 8);
+      }
+    });
+  };
+
+  SpxPopupHost.prototype._captureInnerScroll = function () {
+    const list = [];
+    if (!this.bodyEl) return list;
+    this.bodyEl.querySelectorAll(".spx-defect-scroll, .spx-fp-scroll, .spx-fp-meter-list").forEach((el) => {
+      list.push({ top: el.scrollTop, left: el.scrollLeft });
+    });
+    return list;
+  };
+
+  SpxPopupHost.prototype._restoreInnerScroll = function (list) {
+    if (!this.bodyEl || !list || !list.length) return;
+    const nodes = this.bodyEl.querySelectorAll(".spx-defect-scroll, .spx-fp-scroll, .spx-fp-meter-list");
+    nodes.forEach((el, i) => {
+      if (!list[i]) return;
+      el.scrollTop = list[i].top;
+      el.scrollLeft = list[i].left;
+    });
+  };
+
+  SpxPopupHost.prototype._patchFourPointsLive = function (ctx) {
+    if (!this.bodyEl) return false;
+    const panel = this.bodyEl.querySelector("[data-fp-panel]");
+    if (!panel) return false;
+    const zh = (ctx.lang || "").indexOf("zh") === 0;
+    const fp = ctx.fourPoints || {};
+    const c = fp.counts || {};
+    const isNg = !!(fp.isNg || fp.ng);
+    const result = fp.result || (isNg ? "NG" : "OK");
+    const setText = (key, text) => {
+      const el = panel.querySelector(`[data-fp-val="${key}"]`);
+      if (el && el.textContent !== String(text)) el.textContent = String(text);
+    };
+    const resultEl = panel.querySelector('[data-fp-val="result"]');
+    if (resultEl) {
+      if (resultEl.textContent !== result) resultEl.textContent = result;
+      resultEl.classList.toggle("ok", !isNg);
+      resultEl.classList.toggle("bad", isNg);
+    }
+    setText("total", fp.total != null ? fp.total : 0);
+    setText("per100Sq", Number(fp.per100Sq || 0).toFixed(2));
+    setText("per100", Number(fp.per100 || 0).toFixed(2));
+    setText("threshold", fp.threshold != null ? fp.threshold : 0);
+    setText("gradeI", c.I || 0);
+    setText("gradeII", c.II || 0);
+    setText("gradeIII", c.III || 0);
+    setText("gradeIV", c.IV || 0);
+    const meterUnit = fp.useYard ? (zh ? "码" : "yd") : (zh ? "米" : "m");
+    if (panel.querySelector("[data-fp-meter]")) {
+      setText("meterIndex", `${fp.meterIndex || "-"} ${meterUnit}`);
+      setText("meterPoints", fp.meterPoints || 0);
+      setText("meterGrade", fp.meterGrade || "-");
+      if (fp.meterListText != null) setText("meterList", fp.meterListText);
+    }
+    const rows = Array.isArray(fp.rows) ? fp.rows : [];
+    setText("rowCount", rows.length);
+    const tbody = panel.querySelector("[data-fp-rows]");
+    const scroll = panel.querySelector("[data-fp-scroll]");
+    if (tbody) {
+      const sig = rows
+        .map((r) => `${r.id}|${r.title}|${r.grade}|${r.points}|${Number(r.y).toFixed(1)}`)
+        .join(";");
+      if (tbody.getAttribute("data-fp-sig") !== sig) {
+        const y = scroll ? scroll.scrollTop : 0;
+        const x = scroll ? scroll.scrollLeft : 0;
+        const escFp = (s) =>
+          String(s == null ? "" : s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        tbody.innerHTML = rows.length
+          ? rows
+              .map(
+                (r) => `<tr>
+            <td class="col-idx mono">${r.id}</td>
+            <td class="col-name">${escFp(r.title || "")}</td>
+            <td class="col-grade">${escFp(String(r.grade || ""))}</td>
+            <td class="col-pts spx-v">${r.points}</td>
+            <td class="col-y mono">${Number(r.y).toFixed(1)}</td>
+          </tr>`
+              )
+              .join("")
+          : `<tr><td colspan="5" class="spx-msg">${zh ? "暂无疵点" : "No defects"}</td></tr>`;
+        tbody.setAttribute("data-fp-sig", sig);
+        if (scroll) {
+          scroll.scrollTop = y;
+          scroll.scrollLeft = x;
+        }
+      }
+    }
+    return true;
+  };
+
   /** 强制重建正文（忽略 NO_LIVE_REFRESH；疵点设置保存/切布种/标注工具态变更后用） */
   SpxPopupHost.prototype.rebuild = function () {
     if (!this.activeKey || this.root.hidden) return;
     const ctx = this.getCtx() || {};
-    if (this.activeKey === "systemSettings" && this.settingsTabId)
+    if (this.activeKey === "systemSettings" && this.settingsTabId) {
       ctx.settingsTabId = this.settingsTabId;
+      if (this.settingsSecId) ctx.settingsSecId = this.settingsSecId;
+    }
     this._defStepEditId = "";
     const y = this.bodyEl.scrollTop;
+    const inner = this._captureInnerScroll();
     this.titleEl.textContent = this.activeKey === "login" ? "" : titleOf(this.activeKey, ctx.lang);
     this.bodyEl.innerHTML = buildBody(this.activeKey, ctx);
+    if (this.activeKey === "unwind") this._afterPlcTestBody();
     this.bodyEl.scrollTop = y;
+    this._restoreInnerScroll(inner);
     if (TOOL_KEYS.has(this.activeKey)) {
       const key = this.activeKey;
       requestAnimationFrame(() => this._initTool(key));
     }
     if (this.activeKey === "login") this._syncLoginType();
+    if (this.activeKey === "systemSettings") this._scrollSettingsSec();
+    if (this.activeKey === "defectSettings") {
+      requestAnimationFrame(() => this._syncDefectClothNav(true));
+    }
   };
 
   /** 仅刷新正文（用于序列图实时更新，不重算位置）
@@ -5505,12 +6600,35 @@
     if (!this.activeKey || this.root.hidden) return;
     if (Array.isArray(keys) && keys.length && keys.indexOf(this.activeKey) < 0) return;
     const force = !!(opts && opts.force);
+    // 相机：只补丁帧数/采集态，绝不重建（避免曝光输入无法操作）
+    if (!force && this.activeKey === "camera") {
+      this._patchCameraLive(this.getCtx() || {});
+      return;
+    }
+    // 幅宽传感器：只刷 Fabric/PLC/L/R，保留开关与边距输入
+    if (!force && this.activeKey === "widthSensor") {
+      this._patchWidthSensorLive(this.getCtx() || {});
+      return;
+    }
     // 设置/登录/表单：定时重建会冲掉 tab 与输入；用户操作可 force
     if (!force && NO_LIVE_REFRESH_KEYS.has(this.activeKey)) return;
     // unwind.html：SPX 版 plctest 局部刷状态，保留输入与手动勾选
+    // 若权限从操作员→管理员变化，局部 patch 补不出系统/贴标/手动面板，需整页重建
     if (this.activeKey === "unwind" && !force) {
-      this._patchPlcTestLive(this.getCtx() || {});
-      return;
+      const ctx = this.getCtx() || {};
+      const isAdmin = !!(ctx.about && ctx.about.isAdmin);
+      const root = this.bodyEl && this.bodyEl.querySelector("#popPlcTest");
+      const shownAdmin = !!(root && root.getAttribute("data-admin") === "1");
+      if (root && shownAdmin === isAdmin) {
+        this._patchPlcTestLive(ctx);
+        return;
+      }
+      // 权限不一致：fallthrough 重建
+    }
+    // 四分制：局部 patch，避免整页重建打断列表滚动
+    if (this.activeKey === "fourPoints" && !force) {
+      const ctx = this.getCtx() || {};
+      if (this._patchFourPointsLive(ctx)) return;
     }
     // OSK 编辑中：重建会拆掉目标 input；强制刷新时先收起软键盘态
     if (!force && this.osk && (this.osk.targetId || this.osk.target)) return;
@@ -5526,13 +6644,18 @@
     const prevFocus = document.activeElement;
     const keepFocus = this._placeMode === "left" && prevFocus && !this.root.contains(prevFocus);
     const ctx = this.getCtx() || {};
-    if (this.activeKey === "systemSettings" && this.settingsTabId)
+    if (this.activeKey === "systemSettings" && this.settingsTabId) {
       ctx.settingsTabId = this.settingsTabId;
+      if (this.settingsSecId) ctx.settingsSecId = this.settingsSecId;
+    }
     this._defStepEditId = "";
     const y = this.bodyEl.scrollTop;
+    const inner = this._captureInnerScroll();
     this.titleEl.textContent = titleOf(this.activeKey, ctx.lang);
     this.bodyEl.innerHTML = buildBody(this.activeKey, ctx);
+    if (this.activeKey === "unwind") this._afterPlcTestBody();
     this.bodyEl.scrollTop = y;
+    this._restoreInnerScroll(inner);
     if (this._placeMode === "left") {
       const closeBtn = this.shell.querySelector(".spx-popup-close");
       if (closeBtn) closeBtn.tabIndex = -1;
@@ -5550,6 +6673,120 @@
   SpxPopupHost.prototype._setPlct = function (id, text) {
     const el = this.bodyEl && this.bodyEl.querySelector(`[data-plct="${id}"]`);
     if (el) el.textContent = text;
+  };
+
+  /** 相机弹窗局部更新：帧数 / 采集态，不碰曝光输入与 Tab */
+  SpxPopupHost.prototype._patchCameraLive = function (ctx) {
+    if (!this.bodyEl) return;
+    const zh = (ctx.lang || "").indexOf("zh") === 0;
+    const st = (ctx && ctx.state) || {};
+    const frames = st.camFrames != null ? st.camFrames : "—";
+    const framesEl = this.bodyEl.querySelector("#popCamFrames");
+    if (framesEl) framesEl.textContent = String(frames);
+    const cams = Array.isArray(st.cameras) ? st.cameras : [];
+    this.bodyEl.querySelectorAll("[data-cam-grab]").forEach((cell) => {
+      const n = cell.getAttribute("data-cam-grab") || "";
+      const hit = cams.find((c) => c && String(c.name) === n);
+      if (!hit) return;
+      const label = hit.isGrab ? (zh ? "采集中" : "Grabbing") : zh ? "空闲" : "Idle";
+      const v = cell.querySelector(".spx-cam-stat-v");
+      if (v) v.textContent = label;
+      else cell.textContent = label;
+      cell.classList.toggle("tone-ok", !!hit.isGrab);
+      cell.classList.toggle("tone-idle", !hit.isGrab);
+    });
+  };
+
+  /** 幅宽传感器弹窗：只刷实时测量，不重建开关/边距输入 */
+  SpxPopupHost.prototype._patchWidthSensorLive = function (ctx) {
+    if (!this.bodyEl || !this.bodyEl.querySelector("#wsLiveRow")) return false;
+    const st = (ctx && ctx.state) || {};
+    const plc = st.plc || {};
+    const sv = (ctx && ctx.settingsValues) || {};
+    const fmt = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n.toFixed(1) : "—";
+    };
+    const set = (id, v) => {
+      const el = this.bodyEl.querySelector("#" + id);
+      if (el) el.textContent = fmt(v);
+    };
+    const fabric =
+      st.widthCm != null ? st.widthCm : plc.fabric_width != null ? plc.fabric_width : null;
+    const plcW =
+      plc.plc_fabric_width != null
+        ? plc.plc_fabric_width
+        : st.plcFabricWidth != null
+          ? st.plcFabricWidth
+          : fabric;
+    const left =
+      plc.width_sensor_left != null
+        ? plc.width_sensor_left
+        : st.widthSensorLeft != null
+          ? st.widthSensorLeft
+          : st.width_sensor_left;
+    const right =
+      plc.width_sensor_right != null
+        ? plc.width_sensor_right
+        : st.widthSensorRight != null
+          ? st.widthSensorRight
+          : st.width_sensor_right;
+    set("wsLiveFabric", fabric);
+    set("wsLivePlc", plcW);
+    set("wsLiveLeft", left);
+    set("wsLiveRight", right);
+    const src = this.bodyEl.querySelector("#wsLiveSource");
+    if (src) {
+      const zh = (ctx.lang || "").indexOf("zh") === 0;
+      const visionOn =
+        sv.IsEnableImageWidth === true ||
+        sv.IsEnableImageWidth === 1 ||
+        sv.IsEnableImageWidth === "1" ||
+        String(sv.IsEnableImageWidth || "").toLowerCase() === "true";
+      src.textContent = visionOn
+        ? zh
+          ? "当前：视觉测量"
+          : "Source: vision"
+        : zh
+          ? "当前：幅宽传感器测量"
+          : "Source: sensor";
+    }
+    return true;
+  };
+
+  SpxPopupHost.prototype._afterPlcTestBody = function () {
+    if (!this.bodyEl || !this.bodyEl.querySelector("#popPlcTest")) return;
+    if (global.SpxPlcSys && typeof global.SpxPlcSys.unmount === "function") global.SpxPlcSys.unmount();
+    const panel = this.bodyEl.querySelector("#popPlcSysPanel");
+    if (!panel || !global.SpxPlcSys || typeof global.SpxPlcSys.mount !== "function") return;
+    const ctx = this.getCtx() || {};
+    global.SpxPlcSys.mount(panel, { lang: ctx.lang || "zh-CN" });
+    panel.setAttribute("data-sys-mounted", "1");
+  };
+
+  SpxPopupHost.prototype._ensurePlcSysMounted = function () {
+    const panel = this.bodyEl && this.bodyEl.querySelector("#popPlcSysPanel");
+    if (!panel) return null;
+    if (panel.getAttribute("data-sys-mounted") === "1") return panel;
+    this._afterPlcTestBody();
+    return this.bodyEl.querySelector("#popPlcSysPanel");
+  };
+
+  SpxPopupHost.prototype._switchPlcSysTab = function (tabKey) {
+    const panel = this._ensurePlcSysMounted();
+    if (!panel) return;
+    const key = tabKey || "quick";
+    panel.setAttribute("data-sys-tab", key);
+    panel.querySelectorAll(".spx-plct-sys-tab").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-tab") === key);
+    });
+    panel.querySelectorAll(".spx-plct-sys-pane").forEach((pane) => {
+      const paneKey = pane.getAttribute("data-pane");
+      pane.hidden = paneKey !== key;
+    });
+    if (global.SpxPlcSys && typeof global.SpxPlcSys.setActiveTab === "function") {
+      global.SpxPlcSys.setActiveTab(key);
+    }
   };
 
   SpxPopupHost.prototype._patchPlcTestLive = function (ctx) {
@@ -5843,35 +7080,72 @@
       this.onAction("login-del-user", this.activeKey, this);
       return;
     }
+    // 信息弹窗确认/取消/关闭：必须先走 onAction（写操作日志 + 业务），勿直接关窗跳过
     if (act === "close" || act === "finish-no" || act === "nocloth-cancel") {
-      this.close();
+      this._actEl = actEl;
+      const key = this.activeKey;
+      let ret;
+      try {
+        ret = this.onAction(act, key, this);
+      } catch (_) { /* ignore */ }
+      if (act === "close") {
+        if (this.activeKey) this.close();
+      } else {
+        // finish-no 同步关；nocloth-cancel 可能 await 后再关；无宿主时兜底
+        Promise.resolve(ret).finally(() => {
+          if (this.activeKey === key) this.close();
+        });
+      }
       return;
     }
     if (actEl.closest("#popSettingsTabs")) {
       const tab = actEl.getAttribute("data-tab");
+      const sec = actEl.getAttribute("data-sec") || "";
       if (tab) {
         this.settingsTabId = tab;
-        this.bodyEl.querySelectorAll("#popSettingsTabs button").forEach((b) => b.classList.toggle("active", b === actEl));
+        this.settingsSecId = sec || null;
+        this._applySettingsNav(tab, sec);
         this.bodyEl.querySelectorAll("[data-pane]").forEach((p) => {
           p.hidden = p.getAttribute("data-pane") !== tab;
         });
+        this._scrollSettingsSec(sec);
       }
+      return;
+    }
+    if (act === "debug-tab-scroll-prev") {
+      this._scrollDebugTabs(-1);
+      return;
+    }
+    if (act === "debug-tab-scroll-next") {
+      this._scrollDebugTabs(1);
       return;
     }
     if (act === "debug-tab" || actEl.closest("#popDebugTabs")) {
       const tab = actEl.getAttribute("data-tab");
       if (!tab) return;
-      this.debugTabId = tab;
-      this.bodyEl.querySelectorAll("#popDebugTabs button").forEach((b) =>
-        b.classList.toggle("active", b.getAttribute("data-tab") === tab)
+      this._activateDebugTab(tab, actEl.getAttribute("data-src"));
+      return;
+    }
+    if (act === "rec-panel" || actEl.closest("#popRecPanelTabs")) {
+      const panel = actEl.getAttribute("data-panel");
+      if (!panel) return;
+      const ctx = this.getCtx && this.getCtx();
+      if (ctx && ctx.state) {
+        if (!ctx.state.recordsUi) ctx.state.recordsUi = {};
+        ctx.state.recordsUi.panel = panel;
+      }
+      const root = this.bodyEl && this.bodyEl.querySelector(".spx-records");
+      if (root) root.setAttribute("data-panel", panel);
+      this.bodyEl.querySelectorAll("#popRecPanelTabs button").forEach((b) =>
+        b.classList.toggle("active", b.getAttribute("data-panel") === panel)
       );
-      this.bodyEl.querySelectorAll("[data-debug-pane]").forEach((p) => {
-        const on = p.getAttribute("data-debug-pane") === tab;
+      this.bodyEl.querySelectorAll("[data-rec-pane]").forEach((p) => {
+        const on = p.getAttribute("data-rec-pane") === panel;
         p.hidden = !on;
         if (!on) return;
-        const frame = p.querySelector("iframe.spx-debug-frame");
+        const frame = p.querySelector("iframe.spx-records-frame");
         if (frame && !frame.getAttribute("src")) {
-          const src = frame.getAttribute("data-src") || actEl.getAttribute("data-src");
+          const src = frame.getAttribute("data-src");
           if (src) frame.setAttribute("src", src);
         }
       });
@@ -5879,18 +7153,24 @@
     }
     if (act === "plct-io-open") {
       const sub = this.bodyEl && this.bodyEl.querySelector("#popPlcIo");
-      const frame = this.bodyEl && this.bodyEl.querySelector("#popPlcIoFrame");
-      if (frame) {
-        const src = frame.getAttribute("data-src") || "/newviews/plcstatus?hideNavbar=1&theme=spx";
-        if (!frame.getAttribute("src") || frame.getAttribute("src") === "about:blank")
-          frame.setAttribute("src", src);
-      }
+      const host = this.bodyEl && this.bodyEl.querySelector("#popPlcIoHost");
       if (sub) sub.hidden = false;
+      if (host && global.SpxPlcIo && typeof global.SpxPlcIo.mount === "function") {
+        const ctx = this.getCtx() || {};
+        global.SpxPlcIo.mount(host, { lang: ctx.lang || "zh-CN" });
+      } else if (host) {
+        host.innerHTML = `<div class="spx-plc-io-empty">${(this.getCtx() || {}).lang === "zh-CN" ? "spacex-plc-io.js 未加载" : "spacex-plc-io.js missing"}</div>`;
+      }
       return;
     }
     if (act === "plct-io-close") {
       const sub = this.bodyEl && this.bodyEl.querySelector("#popPlcIo");
+      if (global.SpxPlcIo && typeof global.SpxPlcIo.unmount === "function") global.SpxPlcIo.unmount();
       if (sub) sub.hidden = true;
+      return;
+    }
+    if (act === "plct-sys-tab") {
+      this._switchPlcSysTab(actEl.getAttribute("data-tab") || "quick");
       return;
     }
     if (act === "plct-manual-open") {
@@ -5906,7 +7186,7 @@
       if (sub) sub.hidden = true;
       return;
     }
-    if (act === "plct-cmd" || act === "plct-apply" || act === "plct-movex") {
+    if (act === "plct-cmd" || act === "plct-apply" || act === "plct-movex" || act === "plct-label-test") {
       const ops = actEl.closest("#popPlcManualOps");
       if (ops && ops.classList.contains("is-disabled")) return;
       if (actEl.disabled) return;
@@ -5956,6 +7236,46 @@
       this._syncPlcVal(range);
       this._syncPlcUndoBtn(range);
       this.onAction("plc-live", this.activeKey, this);
+      return;
+    }
+    if (act === "cam-tab") {
+      const name = actEl.getAttribute("data-cam") || "";
+      if (!name) return;
+      this.bodyEl.querySelectorAll('[data-act="cam-tab"]').forEach((b) => {
+        const on = b === actEl;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      this.bodyEl.querySelectorAll("[data-cam-pane]").forEach((p) => {
+        p.hidden = String(p.getAttribute("data-cam-pane")) !== String(name);
+      });
+      const preview = this.bodyEl.querySelector("#popCamPreview");
+      if (preview) preview.setAttribute("data-cam", name);
+      const metaName = this.bodyEl.querySelector("#popCamMetaName");
+      if (metaName) metaName.textContent = name;
+      const ctx = this.getCtx && this.getCtx();
+      if (ctx && ctx.state) ctx.state.selectedCamName = name;
+      this._actEl = actEl;
+      this.onAction("cam-tab", this.activeKey, this);
+      return;
+    }
+    if (act === "light-tab") {
+      const id = actEl.getAttribute("data-id");
+      if (id == null) return;
+      this.bodyEl.querySelectorAll('[data-act="light-tab"]').forEach((b) => {
+        const on = b === actEl;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      this.bodyEl.querySelectorAll("[data-light-pane]").forEach((p) => {
+        p.hidden = String(p.getAttribute("data-light-pane")) !== String(id);
+      });
+      const ctx = this.getCtx && this.getCtx();
+      if (ctx && ctx.state) ctx.state.lightTabId = Number(id);
+      return;
+    }
+    if (act === "light-auto") {
+      // checkbox 走 change/_onInput，避免 click 与 change 双触发
       return;
     }
     if (act === "light-preset") {
@@ -6020,7 +7340,11 @@
       const hi = Number.isFinite(max) ? max : 9999;
       const cur = Number(inp.value);
       const base = Number.isFinite(cur) ? cur : 0;
-      inp.value = String(Math.min(hi, Math.max(lo, base + delta * step)));
+      const next = Math.min(hi, Math.max(lo, base + delta * step));
+      inp.value = String(next);
+      // 边距 +/-：立即落库，顶栏幅宽按钮同步显示
+      this._actEl = actEl;
+      this.onAction("ws-margin-live", this.activeKey, this);
       return;
     }
     if (act === "ws-mode") {
@@ -6030,20 +7354,78 @@
       this.bodyEl.querySelectorAll(".spx-ws-mode-btn").forEach((btn) => {
         btn.classList.toggle("active", btn.getAttribute("data-v") === String(v));
       });
+      // 视觉检测方法：立即写入，避免只改 UI 未点保存就关掉
+      if (inp) {
+        this._actEl = inp;
+        this.onAction("ws-setting-live", this.activeKey, this);
+      }
       return;
     }
-    if (act === "art-zoom") {
+    if (act === "art-zoom" || act === "aided-zoom") {
       const delta = Number(actEl.getAttribute("data-delta")) || 0;
       if (this._toolApi && this._toolApi.setZoom) this._toolApi.setZoom(delta);
       return;
     }
-    if (act === "art-zoom-reset") {
+    if (act === "art-zoom-reset" || act === "aided-zoom-reset") {
       if (this._toolApi && this._toolApi.resetZoom) this._toolApi.resetZoom();
       return;
     }
     if (act === "width-reset") {
       if (this._toolApi && this._toolApi.reset) this._toolApi.reset();
       this.onAction(act, this.activeKey, this);
+      return;
+    }
+    if (act === "defect-settings-cloth-prev" || act === "defect-settings-cloth-next") {
+      this._scrollDefectCloth(act === "defect-settings-cloth-next" ? 1 : -1);
+      return;
+    }
+    if (act === "defect-settings-all-on" || act === "defect-settings-all-off") {
+      this._setDefectDetectAll(act === "defect-settings-all-on");
+      return;
+    }
+    if (act === "defect-settings-custom") {
+      const ctxAdmin = this.getCtx() || {};
+      if (!(ctxAdmin.about && ctxAdmin.about.isAdmin)) {
+        this._actEl = actEl;
+        this.onAction("defect-settings-custom-denied", this.activeKey, this);
+        return;
+      }
+      this._showDefectCustomModal(true);
+      this._actEl = actEl;
+      this.onAction("defect-settings-custom", this.activeKey, this);
+      return;
+    }
+    if (act === "defect-settings-custom-close") {
+      this._showDefectCustomModal(false);
+      return;
+    }
+    if (act === "defect-settings-custom-select-all") {
+      this._setDefectCustomSelect(true);
+      return;
+    }
+    if (act === "defect-settings-custom-select-none") {
+      this._setDefectCustomSelect(false);
+      return;
+    }
+    if (act === "defect-settings-custom-filter") {
+      this._defectCustomFilterEnabled = !this._defectCustomFilterEnabled;
+      const btn = this.bodyEl && this.bodyEl.querySelector("#popDefectCustomFilterBtn");
+      if (btn) {
+        const zh = ((this.getCtx() || {}).lang || "").indexOf("zh") === 0;
+        btn.classList.toggle("active", !!this._defectCustomFilterEnabled);
+        btn.textContent = this._defectCustomFilterEnabled
+          ? (zh ? "显示全部" : "Show all")
+          : (zh ? "只显示已启用" : "Enabled only");
+      }
+      this._applyDefectCustomFilter();
+      return;
+    }
+    if (act === "defect-settings-custom-search") {
+      return;
+    }
+    if (act === "defect-settings-custom-save") {
+      this._actEl = actEl;
+      this.onAction("defect-settings-custom-save", this.activeKey, this);
       return;
     }
     if (act === "defect-settings-cloth-add") {
@@ -6237,10 +7619,247 @@
     if (pane) pane.classList.remove("is-confirming");
   };
 
+  SpxPopupHost.prototype._scrollDefectCloth = function (dir) {
+    if (!this.bodyEl) return;
+    const tabs = this.bodyEl.querySelector("#popDefectClothTabs");
+    if (!tabs) return;
+    const step = Math.max(140, Math.floor(tabs.clientWidth * 0.7));
+    const nextLeft = Math.max(0, Math.min(tabs.scrollWidth - tabs.clientWidth, tabs.scrollLeft + dir * step));
+    if (typeof tabs.scrollTo === "function") {
+      try {
+        tabs.scrollTo({ left: nextLeft, behavior: "smooth" });
+      } catch (_) {
+        tabs.scrollLeft = nextLeft;
+      }
+    } else {
+      tabs.scrollLeft = nextLeft;
+    }
+    window.setTimeout(() => this._syncDefectClothNav(false), 240);
+  };
+
+  SpxPopupHost.prototype._syncDefectClothNav = function (scrollActive) {
+    if (!this.bodyEl) return;
+    const tabs = this.bodyEl.querySelector("#popDefectClothTabs");
+    if (!tabs) return;
+    if (scrollActive) {
+      const active = tabs.querySelector(".spx-defect-cloth-tab.active");
+      if (active && typeof active.scrollIntoView === "function") {
+        try {
+          active.scrollIntoView({ inline: "nearest", block: "nearest" });
+        } catch (_) {
+          /* ignore */
+        }
+      }
+    }
+    const max = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+    const prev = this.bodyEl.querySelector('[data-act="defect-settings-cloth-prev"]');
+    const next = this.bodyEl.querySelector('[data-act="defect-settings-cloth-next"]');
+    const atStart = tabs.scrollLeft <= 1;
+    const atEnd = tabs.scrollLeft >= max - 1;
+    if (prev) {
+      prev.disabled = max <= 0 || atStart;
+      prev.classList.toggle("is-disabled", prev.disabled);
+    }
+    if (next) {
+      next.disabled = max <= 0 || atEnd;
+      next.classList.toggle("is-disabled", next.disabled);
+    }
+    if (!tabs._spxClothNavBound) {
+      tabs._spxClothNavBound = true;
+      tabs.addEventListener("scroll", () => this._syncDefectClothNav(false), { passive: true });
+    }
+  };
+
+  SpxPopupHost.prototype._setDefectDetectAll = function (on) {
+    if (!this.bodyEl) return;
+    this.bodyEl.querySelectorAll(".spx-def-on").forEach((inp) => {
+      inp.checked = !!on;
+      const id = inp.getAttribute("data-id");
+      if (!id) return;
+      const row = this.bodyEl.querySelector(`tr[data-defect-id="${id}"]`);
+      if (row) row.classList.toggle("on", !!on);
+    });
+  };
+
+  SpxPopupHost.prototype._showDefectCustomModal = function (show) {
+    if (!this.bodyEl) return;
+    const modal = this.bodyEl.querySelector("#popDefectCustom");
+    if (!modal) return;
+    modal.hidden = !show;
+    if (show) {
+      const msg = this.bodyEl.querySelector("#popDefectCustomMsg");
+      if (msg) {
+        msg.textContent = "";
+        msg.className = "spx-msg";
+      }
+      const search = this.bodyEl.querySelector("#popDefectCustomSearch");
+      if (search) search.value = "";
+      this._defectCustomFilterEnabled = false;
+      const btn = this.bodyEl.querySelector("#popDefectCustomFilterBtn");
+      if (btn) {
+        const zh = ((this.getCtx() || {}).lang || "").indexOf("zh") === 0;
+        btn.classList.remove("active");
+        btn.textContent = zh ? "只显示已启用" : "Enabled only";
+      }
+    }
+  };
+
+  SpxPopupHost.prototype.setDefectCustomMsg = function (text, kind) {
+    if (!this.bodyEl) return;
+    const msg = this.bodyEl.querySelector("#popDefectCustomMsg");
+    if (!msg) return;
+    msg.textContent = text || "";
+    msg.className = "spx-msg" + (kind ? " " + kind : "");
+  };
+
+  SpxPopupHost.prototype.renderDefectCustomCatalog = function (rows) {
+    if (!this.bodyEl) return;
+    const zh = ((this.getCtx() || {}).lang || "").indexOf("zh") === 0;
+    const tbody = this.bodyEl.querySelector("#popDefectCustomBody");
+    if (!tbody) return;
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="spx-muted">${zh ? "暂无数据" : "No data"}</td></tr>`;
+      return;
+    }
+    const esc = (s) =>
+      String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    tbody.innerHTML = list
+      .map((d) => {
+        const id = String(d.ID != null ? d.ID : d.id != null ? d.id : "");
+        const name = String(d.Name != null ? d.Name : d.name != null ? d.name : "");
+        const customer = String(
+          d.CustomerName != null
+            ? d.CustomerName
+            : d.customerName != null
+              ? d.customerName
+              : ""
+        );
+        const enabled = d.IsDefaultCheck === 1 || d.IsDefaultCheck === true || d.isDefaultCheck === 1;
+        const statusClass = enabled ? "is-on" : "is-off";
+        const statusText = enabled ? (zh ? "已启用" : "On") : (zh ? "未启用" : "Off");
+        return `<tr data-defect-id="${esc(id)}" data-name="${esc(name)}" data-is-enabled="${enabled ? "1" : "0"}" data-modified="0">
+          <td class="col-sw"><input type="checkbox" class="spx-defect-custom-on" data-original-checked="${enabled ? "1" : "0"}" ${enabled ? "checked" : ""} /></td>
+          <td class="col-idx mono">${esc(id)}</td>
+          <td class="col-name"><span class="spx-v">${esc(name)}</span></td>
+          <td class="col-name"><input type="text" class="spx-defect-custom-customer" value="${esc(customer)}" data-original-value="${esc(customer)}" data-osk="1" placeholder="${esc(name)}" autocomplete="off" /></td>
+          <td class="col-sw"><span class="spx-defect-custom-status ${statusClass}">${statusText}</span></td>
+        </tr>`;
+      })
+      .join("");
+    this._applyDefectCustomFilter();
+  };
+
+  SpxPopupHost.prototype._syncDefectCustomRow = function (row) {
+    if (!row) return;
+    const zh = ((this.getCtx() || {}).lang || "").indexOf("zh") === 0;
+    const chk = row.querySelector(".spx-defect-custom-on");
+    const customer = row.querySelector(".spx-defect-custom-customer");
+    const status = row.querySelector(".spx-defect-custom-status");
+    const on = !!(chk && chk.checked);
+    row.setAttribute("data-is-enabled", on ? "1" : "0");
+    if (status) {
+      status.className = "spx-defect-custom-status " + (on ? "is-on" : "is-off");
+      status.textContent = on ? (zh ? "已启用" : "On") : (zh ? "未启用" : "Off");
+    }
+    const origOn = chk && chk.getAttribute("data-original-checked") === "1";
+    const origCustomer = customer ? String(customer.getAttribute("data-original-value") || "") : "";
+    const curCustomer = customer ? String(customer.value || "").trim() : "";
+    const changed = (chk && origOn !== on) || origCustomer !== curCustomer;
+    row.setAttribute("data-modified", changed ? "1" : "0");
+  };
+
+  SpxPopupHost.prototype._setDefectCustomSelect = function (on) {
+    if (!this.bodyEl) return;
+    this.bodyEl.querySelectorAll("#popDefectCustomBody tr[data-defect-id]").forEach((row) => {
+      if (row.style.display === "none") return;
+      const chk = row.querySelector(".spx-defect-custom-on");
+      if (!chk) return;
+      chk.checked = !!on;
+      this._syncDefectCustomRow(row);
+    });
+    this._applyDefectCustomFilter();
+  };
+
+  SpxPopupHost.prototype._applyDefectCustomFilter = function () {
+    if (!this.bodyEl) return;
+    const searchEl = this.bodyEl.querySelector("#popDefectCustomSearch");
+    const q = String((searchEl && searchEl.value) || "").trim().toLowerCase();
+    const onlyOn = !!this._defectCustomFilterEnabled;
+    this.bodyEl.querySelectorAll("#popDefectCustomBody tr[data-defect-id]").forEach((row) => {
+      const id = String(row.getAttribute("data-defect-id") || "").toLowerCase();
+      const name = String(row.getAttribute("data-name") || "").toLowerCase();
+      const customerEl = row.querySelector(".spx-defect-custom-customer");
+      const customer = customerEl ? String(customerEl.value || "").toLowerCase() : "";
+      const enabled = row.getAttribute("data-is-enabled") === "1";
+      const hit =
+        !q ||
+        id.indexOf(q) >= 0 ||
+        name.indexOf(q) >= 0 ||
+        customer.indexOf(q) >= 0;
+      const pass = hit && (!onlyOn || enabled);
+      row.style.display = pass ? "" : "none";
+    });
+  };
+
+  SpxPopupHost.prototype.collectDefectCustomChanges = function () {
+    if (!this.bodyEl) return [];
+    const out = [];
+    this.bodyEl.querySelectorAll("#popDefectCustomBody tr[data-defect-id][data-modified='1']").forEach((row) => {
+      const id = row.getAttribute("data-defect-id") || "";
+      const name = row.getAttribute("data-name") || "";
+      const chk = row.querySelector(".spx-defect-custom-on");
+      const customer = row.querySelector(".spx-defect-custom-customer");
+      if (!id || !chk) return;
+      out.push({
+        defectid: id,
+        name: name,
+        isdefaultcheck: chk.checked ? 1 : 0,
+        customername: customer ? String(customer.value || "").trim() : "",
+      });
+    });
+    return out;
+  };
+
   SpxPopupHost.prototype._onInput = function (e) {
     const t = e.target;
     if (t.id === "popLoginType" || t.getAttribute("data-act") === "login-type") {
       this._syncLoginType();
+      return;
+    }
+    // 边距数值输入（含 OSK）：change 时立即写入，顶栏幅宽同步
+    if (
+      e.type === "change" &&
+      t.matches &&
+      t.matches('input[data-setting-key="DistanceToLeftEdge"], input[data-setting-key="DistanceToRightEdge"]')
+    ) {
+      const wrap = t.closest("[data-ws-step]");
+      if (wrap) {
+        const min = Number(wrap.getAttribute("data-min"));
+        const max = Number(wrap.getAttribute("data-max"));
+        const lo = Number.isFinite(min) ? min : 0;
+        const hi = Number.isFinite(max) ? max : 9999;
+        const cur = Number(t.value);
+        const next = Number.isFinite(cur) ? Math.min(hi, Math.max(lo, cur)) : lo;
+        t.value = String(next);
+      }
+      this._actEl = t;
+      this.onAction("ws-margin-live", this.activeKey, this);
+      return;
+    }
+    // 幅宽传感器开关：change 立即写入（与边距一致，避免关弹窗后复位）
+    if (
+      e.type === "change" &&
+      this.activeKey === "widthSensor" &&
+      t.matches &&
+      t.matches('input[data-setting-control="toggle"][data-setting-key]')
+    ) {
+      this._actEl = t;
+      this.onAction("ws-setting-live", this.activeKey, this);
       return;
     }
     if (t.classList && t.classList.contains("spx-plct-inp")) {
@@ -6284,6 +7903,25 @@
       this._actEl = t;
       this.onAction("light-live", this.activeKey, this);
     }
+    if (t.getAttribute("data-act") === "light-auto" && e.type === "change") {
+      const ctx = this.getCtx && this.getCtx();
+      const on = !!t.checked;
+      if (ctx && ctx.state) {
+        ctx.state.lightAuto = on;
+        if (Array.isArray(ctx.state.lights)) {
+          ctx.state.lights = ctx.state.lights.map((L) => Object.assign({}, L, { auto: on }));
+        }
+      }
+      const row = t.closest(".spx-light-auto-row");
+      if (row) row.setAttribute("data-auto", on ? "1" : "0");
+      const ico = row && row.querySelector(".spx-light-auto-ico");
+      const lab = t.closest(".spx-switch");
+      const zh = !!(ctx && String(ctx.lang || "").indexOf("zh") === 0);
+      if (lab) lab.title = zh ? (on ? "开" : "关") : on ? "On" : "Off";
+      if (ico) ico.title = zh ? (on ? "自动调光" : "手动调光") : on ? "Auto" : "Manual";
+      this._actEl = t;
+      this.onAction("light-auto", this.activeKey, this);
+    }
     if (t.id === "popDefStepEditorVal" && this._defStepEditId) {
       this._commitDefStepEditor();
       return;
@@ -6296,6 +7934,22 @@
       const id = t.getAttribute("data-id");
       const row = this.bodyEl.querySelector(`tr[data-defect-id="${id}"]`);
       if (row) row.classList.toggle("on", !!t.checked);
+    }
+    if (t.classList && t.classList.contains("spx-defect-custom-on")) {
+      const row = t.closest("tr[data-defect-id]");
+      this._syncDefectCustomRow(row);
+      if (this._defectCustomFilterEnabled) this._applyDefectCustomFilter();
+      return;
+    }
+    if (t.classList && t.classList.contains("spx-defect-custom-customer")) {
+      const row = t.closest("tr[data-defect-id]");
+      this._syncDefectCustomRow(row);
+      if (e.type === "input") this._applyDefectCustomFilter();
+      return;
+    }
+    if (t.id === "popDefectCustomSearch") {
+      this._applyDefectCustomFilter();
+      return;
     }
     if (t.id === "popRecQueryType") {
       this._actEl = t;
