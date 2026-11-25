@@ -6339,9 +6339,20 @@
     this._defStepEditId = "";
     this.activeKey = key;
     this.triggerEl = trigger || null;
-    this.titleEl.textContent = key === "login" ? "" : titleOf(key, ctx.lang);
-    this.bodyEl.innerHTML = buildBody(key, ctx);
-    if (key === "unwind") this._afterPlcTestBody();
+    if (this.titleEl)
+      this.titleEl.textContent = key === "login" ? "" : titleOf(key, ctx.lang);
+    try {
+      this.bodyEl.innerHTML = buildBody(key, ctx);
+    } catch (e) {
+      console.error("buildBody", key, e);
+      this.bodyEl.innerHTML =
+        '<p class="spx-msg">popup error: ' + String(key) + "</p>";
+    }
+    try {
+      if (key === "unwind") this._afterPlcTestBody();
+    } catch (e) {
+      console.warn("_afterPlcTestBody", e);
+    }
 
     const mode = this.modeFor(key);
     this._placeMode = mode;
@@ -6353,14 +6364,31 @@
     this.root.classList.toggle("modeless", mode === "left");
     this.root.hidden = false;
     applyPopupOpacity(this.shell, ctx, key);
-    this._place(mode, trigger);
+    try {
+      this._place(mode, trigger);
+    } catch (e) {
+      console.warn("_place", key, e);
+    }
+    const openGen = (this._openGen = (this._openGen || 0) + 1);
     if (TOOL_KEYS.has(key)) {
-      requestAnimationFrame(() => this._initTool(key));
+      requestAnimationFrame(() => {
+        if (this._openGen !== openGen || this.activeKey !== key) return;
+        try {
+          this._initTool(key);
+        } catch (e) {
+          console.warn("_initTool", key, e);
+        }
+      });
     }
     if (key === "systemSettings") this._scrollSettingsSec();
     if (key === "login") this._syncLoginType();
     if (key === "defectSettings") {
-      requestAnimationFrame(() => this._syncDefectClothNav(true));
+      requestAnimationFrame(() => {
+        if (this._openGen !== openGen || this.activeKey !== key) return;
+        try {
+          this._syncDefectClothNav(true);
+        } catch (_) { /* ignore */ }
+      });
     }
 
     const langSel = this.bodyEl.querySelector("#popSettingsLang");
@@ -6886,9 +6914,13 @@
     const t = trigger ? trigger.getBoundingClientRect() : null;
     const gap = 8;
 
-    const st = (this.getCtx && this.getCtx()) ? (this.getCtx().state || {}) : {};
+    // 优先 settingsValues（设置页保存），其次 state（API 回填），与 SpxPopupHost::popupSizeFrac 一致
+    const ctxPlace = (this.getCtx && this.getCtx()) || {};
+    const svPlace = ctxPlace.settingsValues || {};
+    const stPlace = ctxPlace.state || {};
     const sizeFrac = (keyName, defPct) => {
-      const n = Number(st[keyName]);
+      const raw = svPlace[keyName] != null ? svPlace[keyName] : stPlace[keyName];
+      const n = Number(raw);
       const pct = Number.isFinite(n) ? n : defPct;
       return Math.max(20, Math.min(100, Math.round(pct))) / 100;
     };
